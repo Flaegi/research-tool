@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainstorm Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../src/style.css">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <div id="ui-layer">
+    <header>
+      <h1>Brainstorm Tool</h1>
+      <p>Local Graph Persistence</p>
+    </header>
+    <div id="controls">
+      <button id="btn-add-node">Add Node</button>
+      <button id="btn-export">Export to Knowledge Base</button>
+    </div>
+  </div>
+  
+  <div id="side-panel" class="hidden">
+    <div class="panel-header">
+      <h2 id="panel-title">Node Title</h2>
+      <button id="btn-close-panel">✕</button>
+    </div>
+    <div class="panel-content">
+      <p id="panel-depth">Depth Level: <span id="depth-value">0</span>/10</p>
+      <textarea id="panel-notes" placeholder="Notes & AI insights will appear here..."></textarea>
+    </div>
+  </div>
+
+  <div id="graph-container"></div>
+  
+  <script type="module" src="../src/main.js"></script>
+</body>
+</html>
