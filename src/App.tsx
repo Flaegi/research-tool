@@ -32,11 +32,10 @@ const MAP_EDGE_STYLE: Partial<Edge> = {
   animated: false,
 };
 
-/** Zone size: large enough to encompass radially spawned children */
-const ZONE_W = 1100;
-const ZONE_H = 900;
-/** Spawn radius for child nodes around a parent */
-const SPAWN_RADIUS = 500;
+/** Base spawn radius — scales down with depth so deeper clusters are tighter */
+const BASE_SPAWN_RADIUS = 500;
+/** Padding around the bounding box of children for zone sizing */
+const ZONE_PADDING = 280;
 
 // ----- Topic Expansion Mock-LLM -----
 
@@ -114,6 +113,8 @@ function EditorCanvas() {
 
       const angleStep = (2 * Math.PI) / suggestions.length;
       const angleOffset = -Math.PI / 2; // start top
+      // Decrease radius with depth: root=500, depth1=400, depth2=320...
+      const spawnRadius = BASE_SPAWN_RADIUS * Math.pow(0.8, parentDepth);
 
       const childNodes = suggestions.map((suggestion, i) => {
         const angle = angleOffset + angleStep * i;
@@ -121,8 +122,8 @@ function EditorCanvas() {
           id: `node-${Date.now()}-${i}`,
           type: 'concept',
           position: {
-            x: parentNode.position.x + SPAWN_RADIUS * Math.cos(angle),
-            y: parentNode.position.y + SPAWN_RADIUS * Math.sin(angle),
+            x: parentNode.position.x + spawnRadius * Math.cos(angle),
+            y: parentNode.position.y + spawnRadius * Math.sin(angle),
           },
           data: {
             title: suggestion,
@@ -135,16 +136,23 @@ function EditorCanvas() {
         };
       });
 
-      // Create cluster zone around the children
-      // Center = average position of children; sized to encompass them all
-      const avgX = childNodes.reduce((sum, n) => sum + n.position.x, 0) / childNodes.length;
-      const avgY = childNodes.reduce((sum, n) => sum + n.position.y, 0) / childNodes.length;
+      // Dynamic zone sizing: fit to actual bounding box of children
+      const xs = childNodes.map(n => n.position.x);
+      const ys = childNodes.map(n => n.position.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const zoneW = (maxX - minX) + ZONE_PADDING;
+      const zoneH = (maxY - minY) + ZONE_PADDING;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
 
       const zoneNode = {
         id: zoneId,
         type: 'clusterZone',
-        position: { x: avgX - ZONE_W / 2, y: avgY - ZONE_H / 2 },
-        style: { width: ZONE_W, height: ZONE_H, zIndex: -1 },
+        position: { x: centerX - zoneW / 2, y: centerY - zoneH / 2 },
+        style: { width: zoneW, height: zoneH, zIndex: -1 },
         data: {
           label: parentTitle,
           color: paletteEntry.color,
