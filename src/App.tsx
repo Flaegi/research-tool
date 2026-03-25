@@ -39,49 +39,114 @@ const BASE_SPAWN_RADIUS = 500;
 /** Padding around the bounding box of children for zone sizing */
 const ZONE_PADDING = 280;
 
-// ----- Topic Expansion Mock-LLM -----
+// ----- Knowledge Graph Data -----
+
+/** Represents a thematic cluster with a label and its keyword nodes */
+interface ClusterDef {
+  label: string;
+  keywords: string[];
+}
 
 /**
- * Simulates an LLM topic expansion.
- * Returns 3–4 contextually plausible sub-topics for a given research term.
+ * Returns 5-7 thematic clusters for a given root research topic.
+ * Each cluster has a label (the territory name) and 2-4 keyword nodes.
+ * Mimics InfraNodus-style semantic clustering.
  */
-const expandTopic = (topic: string, depth: number = 0): string[] => {
+const getInitialClusters = (topic: string): ClusterDef[] => {
   const t = topic.toLowerCase();
-  const expansions: Record<string, string[]> = {
-    quantum: ['Quantum Entanglement', 'Quantum Decoherence', 'Topological Qubits', 'Quantum Error Correction'],
-    biology: ['Epigenetics', 'Synthetic Biology', 'Proteomics', 'Microbiome Dynamics'],
-    ai: ['Transformer Architecture', 'Reinforcement Learning', 'Mechanistic Interpretability', 'Sparse Autoencoders'],
-    climate: ['Carbon Sequestration', 'Tipping Points', 'Climate Feedback Loops', 'Geoengineering'],
-    design: ['Affordance Theory', 'Systems Thinking', 'Participatory Design', 'Material Semiotics'],
-    neuro: ['Predictive Coding', 'Neuroplasticity', 'Default Mode Network', 'Synaptic Pruning'],
-    space: ['Orbital Mechanics', 'Dark Matter Distribution', 'Exoplanet Atmospheres', 'Solar Wind Dynamics'],
-    evolution: ['Punctuated Equilibrium', 'Sexual Selection', 'Horizontal Gene Transfer', 'Niche Construction'],
-    consciousness: ['Global Workspace Theory', 'Integrated Information', 'Phenomenal Binding', 'Neural Correlates'],
-    language: ['Morphosyntax', 'Semantic Compositionality', 'Embodied Cognition', 'Proto-Language Origins'],
-    energy: ['Solid-State Batteries', 'Fusion Confinement', 'Grid-Scale Storage', 'Thermoelectric Efficiency'],
-    material: ['Metamaterials', 'Topological Insulators', 'Amorphous Alloys', 'Self-Healing Polymers'],
+
+  const db: Record<string, ClusterDef[]> = {
+    quantum: [
+      { label: 'Foundations', keywords: ['Wave-Particle Duality', 'Superposition', 'Measurement Problem'] },
+      { label: 'Computing', keywords: ['Qubit Architecture', 'Error Correction', 'Quantum Advantage'] },
+      { label: 'Entanglement', keywords: ['Bell Inequalities', 'Decoherence', 'Teleportation'] },
+      { label: 'Applications', keywords: ['Cryptography', 'Sensing', 'Simulation'] },
+      { label: 'Open Problems', keywords: ['Quantum Gravity', 'Many-Worlds', 'Interpretations'] },
+    ],
+    ai: [
+      { label: 'Architecture', keywords: ['Transformers', 'Diffusion Models', 'State Space Models'] },
+      { label: 'Training', keywords: ['RLHF', 'Pretraining at Scale', 'Fine-tuning'] },
+      { label: 'Interpretability', keywords: ['Sparse Autoencoders', 'Mechanistic Interp', 'Circuit Analysis'] },
+      { label: 'Risks & Alignment', keywords: ['Deceptive Alignment', 'Value Learning', 'Mesa-Optimization'] },
+      { label: 'Embodiment', keywords: ['Robotics Integration', 'World Models', 'Sensorimotor Loop'] },
+    ],
+    climate: [
+      { label: 'Drivers', keywords: ['CO₂ Forcing', 'Methane Feedback', 'Albedo Effects'] },
+      { label: 'Tipping Points', keywords: ['AMOC Collapse', 'Ice Sheet Dynamics', 'Permafrost Thaw'] },
+      { label: 'Interventions', keywords: ['Carbon Capture', 'Solar Geoengineering', 'Reforestation'] },
+      { label: 'Policy', keywords: ['Carbon Markets', 'Just Transition', 'Paris Agreement'] },
+      { label: 'Impacts', keywords: ['Biodiversity Loss', 'Sea Level Rise', 'Extreme Weather'] },
+    ],
+    biology: [
+      { label: 'Genomics', keywords: ['CRISPR', 'Epigenetics', 'Gene Regulation'] },
+      { label: 'Systems', keywords: ['Proteomics', 'Metabolomics', 'Interactome'] },
+      { label: 'Evolution', keywords: ['Horizontal Gene Transfer', 'Niche Construction', 'Convergence'] },
+      { label: 'Synthetic', keywords: ['Biofoundries', 'Minimal Cells', 'Xenobiology'] },
+      { label: 'Microbiome', keywords: ['Gut-Brain Axis', 'Dysbiosis', 'Phage Therapy'] },
+    ],
+    design: [
+      { label: 'Theory', keywords: ['Affordances', 'Material Semiotics', 'Embodiment'] },
+      { label: 'Process', keywords: ['Systems Thinking', 'Prototyping', 'Iteration'] },
+      { label: 'Social', keywords: ['Participatory Design', 'Co-creation', 'Decolonial Practice'] },
+      { label: 'Digital', keywords: ['UX Research', 'Speculative Design', 'AI-Assisted Design'] },
+    ],
+    neuro: [
+      { label: 'Theories', keywords: ['Predictive Coding', 'Global Workspace', 'Integrated Information'] },
+      { label: 'Plasticity', keywords: ['Synaptic Pruning', 'Neurogenesis', 'Hebbian Learning'] },
+      { label: 'Networks', keywords: ['Default Mode', 'Salience Network', 'Connectome'] },
+      { label: 'Disorders', keywords: ['Neurodegeneration', 'Psychiatric Comorbidity', 'Biomarkers'] },
+    ],
+    space: [
+      { label: 'Exploration', keywords: ['Crewed Mars Mission', 'Lunar Gateway', 'Deep Space Nav'] },
+      { label: 'Astrophysics', keywords: ['Dark Matter', 'Gravitational Waves', 'Exoplanet Atmospheres'] },
+      { label: 'Propulsion', keywords: ['Ion Drives', 'Solar Sails', 'Nuclear Thermal'] },
+      { label: 'Cosmology', keywords: ['Inflation Theory', 'Dark Energy', 'CMB Anisotropy'] },
+    ],
+    consciousness: [
+      { label: 'Theories', keywords: ['Global Workspace', 'IIT', 'Higher-Order Thought'] },
+      { label: 'Hard Problem', keywords: ['Qualia', 'Phenomenal Binding', 'Explanatory Gap'] },
+      { label: 'Neural Basis', keywords: ['NCC', 'Thalamo-Cortical Loop', 'Recurrent Processing'] },
+      { label: 'Altered States', keywords: ['Psychedelics', 'Dreaming', 'Meditation'] },
+    ],
   };
 
-  const matchKey = Object.keys(expansions).find(k => t.includes(k));
-  if (matchKey) return expansions[matchKey];
+  const matchKey = Object.keys(db).find(k => t.includes(k));
+  if (matchKey) return db[matchKey];
 
-  // Fallback: generic academic expansion
-  const suffixes = ['Mechanisms', 'Theoretical Basis', 'Applied Research', 'Emergent Patterns', 'Open Problems', 'Historical Context'];
-  const words = topic.split(' ');
-  const root = words[words.length - 1] || topic;
-  return suffixes.slice(0, 4).map(s => `${root} — ${s}`);
+  // Generic fallback clusters
+  return [
+    { label: 'Foundations', keywords: ['Core Principles', 'Historical Roots', 'Key Definitions'] },
+    { label: 'Methods', keywords: ['Research Approaches', 'Measurement', 'Methodology'] },
+    { label: 'Applications', keywords: ['Practical Uses', 'Case Studies', 'Industry Impact'] },
+    { label: 'Open Questions', keywords: ['Unsolved Problems', 'Controversies', 'Frontiers'] },
+    { label: 'Connections', keywords: ['Adjacent Fields', 'Interdisciplinary Links', 'Analogies'] },
+  ];
 };
 
 /**
- * Returns 2-3 smart explore suggestions for a given node topic.
- * Shown as quick-action chips in the node header after expansion.
+ * Returns 3-4 deeper sub-topics when a user explores a specific cluster keyword.
+ */
+const expandKeyword = (topic: string): string[] => {
+  const t = topic.toLowerCase();
+  if (t.includes('crispr')) return ['Base Editing', 'Prime Editing', 'Epigenome Editing', 'Delivery Vectors'];
+  if (t.includes('transformer')) return ['Attention Mechanism', 'Positional Encoding', 'KV Cache', 'Flash Attention'];
+  if (t.includes('carbon')) return ['Direct Air Capture', 'BECCS', 'Ocean Alkalinity', 'Biochar'];
+  if (t.includes('qubit')) return ['Superconducting', 'Photonic', 'Topological', 'Trapped Ion'];
+  if (t.includes('dark matter')) return ['WIMP Candidates', 'Axions', 'Primordial Black Holes', 'Modified Gravity'];
+  const words = topic.split(/[ —]/g).filter(Boolean);
+  const root = words[0] || topic;
+  return [`${root} Mechanisms`, `${root} Evidence`, `${root} Critique`, `${root} Applications`];
+};
+
+/**
+ * Returns 2-3 smart explore directions for a node — shown as chips after expansion.
  */
 const getSuggestedDirections = (topic: string): string[] => {
   const t = topic.toLowerCase();
-  if (t.includes('quantum')) return ['Measure effects', 'Compare models', 'Find applications'];
-  if (t.includes('ai') || t.includes('model')) return ['Trace limitations', 'Compare architectures', 'Find edge cases'];
+  if (t.includes('quantum') || t.includes('qubit')) return ['Measure effects', 'Compare models', 'Find applications'];
+  if (t.includes('ai') || t.includes('model') || t.includes('transformer')) return ['Trace limitations', 'Compare architectures', 'Find edge cases'];
   if (t.includes('climate') || t.includes('carbon')) return ['Scale projections', 'Policy links', 'Opposing views'];
-  if (t.includes('bio') || t.includes('gene')) return ['Clinical trials', 'Ethical implications', 'Evolutionary roots'];
+  if (t.includes('bio') || t.includes('gene') || t.includes('crispr')) return ['Clinical trials', 'Ethical implications', 'Evolutionary roots'];
   return ['Zoom out', 'Find contradictions', 'Historical perspective'];
 };
 
@@ -151,22 +216,12 @@ function EditorCanvas() {
   const { theme, setTheme } = useTheme();
   const { fitView, setViewport } = useReactFlow();
 
-  /**
-   * Re-attaches the onExplore callback after loading from storage
-   * (functions cannot be serialized to JSON).
-   */
-  const rehydrateNodes = useCallback((rawNodes: any[]) => {
-    return rawNodes.map(n => ({
-      ...n,
-      data: { ...n.data, onExplore: handleExplore },
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // NOTE: rehydration is done inline in handleLoad — see below
 
   /**
-   * Core expand function — called when user clicks "+" on a node.
-   * Generates suggestion sub-nodes and a cluster zone around them.
-   * Also copies a research prompt to clipboard for chat integration.
+   * Drill-down expand — called when user clicks "+" on any keyword node.
+   * Generates 3-4 specific sub-topics and a deeper cluster zone around them.
+   * Also copies a research prompt to clipboard.
    */
   const handleExplore = useCallback((nodeId: string) => {
     setNodes((nds) => {
@@ -174,20 +229,22 @@ function EditorCanvas() {
       if (!parentNode) return nds;
 
       const parentTitle: string = parentNode.data.title;
-      const parentDepth: number = parentNode.data.depth ?? 0;
-      const suggestions = expandTopic(parentTitle, parentDepth);
-      const exploreHints = getSuggestedDirections(parentTitle);
+      const parentDepth: number = parentNode.data.depth ?? 1;
+      const subTopics = expandKeyword(parentTitle);
+      const hints = getSuggestedDirections(parentTitle);
 
       const paletteEntry = CLUSTER_PALETTE[clusterIndexRef.current % CLUSTER_PALETTE.length];
       clusterIndexRef.current += 1;
       const zoneId = `zone-${nodeId}-${Date.now()}`;
 
-      const angleStep = (2 * Math.PI) / suggestions.length;
+      const angleStep = (2 * Math.PI) / subTopics.length;
       const angleOffset = -Math.PI / 2;
-      const spawnRadius = BASE_SPAWN_RADIUS * Math.pow(0.8, parentDepth);
+      // Tighter radius for deep dives
+      const spawnRadius = BASE_SPAWN_RADIUS * Math.pow(0.65, parentDepth);
 
-      const childNodes = suggestions.map((suggestion, i) => {
-        const angle = angleOffset + angleStep * i;
+      const childNodes = subTopics.map((sub, i) => {
+        const jitter = (Math.random() - 0.5) * 0.25; // slight organic jitter
+        const angle = angleOffset + angleStep * i + jitter;
         return {
           id: `node-${Date.now()}-${i}`,
           type: 'concept',
@@ -196,47 +253,35 @@ function EditorCanvas() {
             y: parentNode.position.y + spawnRadius * Math.sin(angle),
           },
           data: {
-            title: suggestion,
-            concept: generateNodeConcept(suggestion),
-            trl: Math.max(1, 9 - parentDepth * 2),
-            sourceReliability: parentDepth === 0 ? 'High' : parentDepth === 1 ? 'Medium' : 'Low',
+            title: sub,
+            concept: `Deep research into "${sub}" within the context of "${parentTitle}".`,
+            trl: Math.max(1, 8 - parentDepth * 2),
+            sourceReliability: (parentDepth <= 1 ? 'High' : parentDepth === 2 ? 'Medium' : 'Low') as any,
             depth: parentDepth + 1,
             onExplore: handleExplore,
           },
         };
       });
 
-      // Update parent node to show explore hints
+      // Mark parent as expanded with direction hints
       const updatedParent = {
         ...parentNode,
-        data: {
-          ...parentNode.data,
-          subtopics: exploreHints,
-          onExplore: handleExplore,
-        },
+        data: { ...parentNode.data, subtopics: hints, onExplore: handleExplore },
       };
 
       const xs = childNodes.map(n => n.position.x);
       const ys = childNodes.map(n => n.position.y);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-      const zoneW = (maxX - minX) + ZONE_PADDING;
-      const zoneH = (maxY - minY) + ZONE_PADDING;
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
+      const zoneW = (Math.max(...xs) - Math.min(...xs)) + ZONE_PADDING;
+      const zoneH = (Math.max(...ys) - Math.min(...ys)) + ZONE_PADDING;
+      const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
 
       const zoneNode = {
         id: zoneId,
         type: 'clusterZone',
         position: { x: centerX - zoneW / 2, y: centerY - zoneH / 2 },
         style: { width: zoneW, height: zoneH, zIndex: -1 },
-        data: {
-          label: parentTitle,
-          color: paletteEntry.color,
-          pattern: paletteEntry.pattern,
-        },
+        data: { label: parentTitle, color: paletteEntry.color, pattern: paletteEntry.pattern },
         selectable: true,
         draggable: true,
       };
@@ -251,7 +296,7 @@ function EditorCanvas() {
         })),
       ]);
 
-      const prompt = `Researche das Thema "${parentTitle}" in der Tiefe. Leite daraus folgende Unterthemen her: ${suggestions.join(', ')}. Gib mir zu jedem eine kurze, präzise Research-Erklärung.`;
+      const prompt = `Geh tiefer in "${parentTitle}": ${subTopics.join(', ')}. Erkläre jeden Aspekt präzise und nenne offene Fragen.`;
       navigator.clipboard.writeText(prompt).catch(() => {});
 
       return [zoneNode, ...childNodes, ...nds.filter(n => n.id !== nodeId), updatedParent];
@@ -260,19 +305,127 @@ function EditorCanvas() {
     setTimeout(() => fitView({ duration: 900, padding: 0.15 }), 80);
   }, [fitView]);
 
-  /** Start a new research topic from the input bar */
+  /**
+   * Builds the full InfraNodus-style cluster map when user submits a topic.
+   * Creates: root node (center) + N thematic zones, each with 2-4 keyword nodes.
+   * Layout is organic: varying radii (500–750px) and slight angle jitter per cluster.
+   */
   const handleStartResearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    const topic = inputValue.trim();
+    if (!topic) return;
 
     const rootId = `root-${Date.now()}`;
+    const clusters = getInitialClusters(topic);
+    clusterIndexRef.current = 0;
+
+    // Spread clusters with varied radii and angles for organic feel
+    const clusterAngleStep = (2 * Math.PI) / clusters.length;
+    // Vary radius between 550 and 750 per cluster
+    const radii = clusters.map((_, i) => 580 + ((i * 73) % 180));
+
+    const allNewNodes: any[] = [];
+    const allNewEdges: any[] = [];
+
+    clusters.forEach((cluster, ci) => {
+      const paletteEntry = CLUSTER_PALETTE[ci % CLUSTER_PALETTE.length];
+      clusterIndexRef.current = ci + 1;
+
+      // Cluster center angle: distribute unevenly (slight golden-ratio offset)
+      const clusterAngle = clusterAngleStep * ci + ci * 0.15;
+      const radius = radii[ci];
+      const clusterCx = radius * Math.cos(clusterAngle - Math.PI / 2);
+      const clusterCy = radius * Math.sin(clusterAngle - Math.PI / 2);
+
+      // Keyword nodes spread tightly around cluster center
+      const kwCount = cluster.keywords.length;
+      const kwRadius = 160 + kwCount * 20;
+      const kwAngleStep = (1.4 * Math.PI) / Math.max(kwCount - 1, 1);
+      const kwAngleStart = clusterAngle - 0.7 * Math.PI;
+
+      const kwNodes = cluster.keywords.map((kw, ki) => {
+        const kwAngle = kwAngleStart + kwAngleStep * ki;
+        const jitter = (Math.random() - 0.5) * 30;
+        const kwId = `kw-${Date.now()}-${ci}-${ki}`;
+        return {
+          id: kwId,
+          type: 'concept',
+          position: {
+            x: clusterCx + kwRadius * Math.cos(kwAngle) + jitter,
+            y: clusterCy + kwRadius * Math.sin(kwAngle) + jitter,
+          },
+          data: {
+            title: kw,
+            concept: `Keyword in "${cluster.label}" cluster of "${topic}" research.`,
+            trl: 7,
+            sourceReliability: 'High' as const,
+            depth: 1,
+            onExplore: handleExplore,
+          },
+        };
+      });
+
+      // Proxy node: stands at cluster center, represents the cluster label
+      const proxyId = `proxy-${Date.now()}-${ci}`;
+      const proxyNode = {
+        id: proxyId,
+        type: 'concept',
+        position: { x: clusterCx, y: clusterCy },
+        data: {
+          title: cluster.label,
+          concept: `Thematic cluster: ${cluster.keywords.join(', ')}`,
+          trl: 8,
+          sourceReliability: 'High' as const,
+          depth: 1,
+          onExplore: handleExplore,
+        },
+      };
+
+      // Zone: fits the cluster proxy + all keywords
+      const allX = [...kwNodes.map(n => n.position.x), clusterCx];
+      const allY = [...kwNodes.map(n => n.position.y), clusterCy];
+      const zoneW = (Math.max(...allX) - Math.min(...allX)) + ZONE_PADDING;
+      const zoneH = (Math.max(...allY) - Math.min(...allY)) + ZONE_PADDING;
+      const zoneCx = (Math.min(...allX) + Math.max(...allX)) / 2;
+      const zoneCy = (Math.min(...allY) + Math.max(...allY)) / 2;
+
+      const zoneNode = {
+        id: `zone-initial-${ci}`,
+        type: 'clusterZone',
+        position: { x: zoneCx - zoneW / 2, y: zoneCy - zoneH / 2 },
+        style: { width: Math.max(zoneW, 400), height: Math.max(zoneH, 300), zIndex: -1 },
+        data: { label: cluster.label, color: paletteEntry.color, pattern: paletteEntry.pattern },
+        selectable: true,
+        draggable: true,
+      };
+
+      allNewNodes.push(zoneNode, proxyNode, ...kwNodes);
+
+      // Edges: root → proxy, proxy → each keyword
+      allNewEdges.push({
+        id: `edge-root-${proxyId}`,
+        source: rootId,
+        target: proxyId,
+        ...MAP_EDGE_STYLE,
+      });
+      kwNodes.forEach(kw => {
+        allNewEdges.push({
+          id: `edge-${proxyId}-${kw.id}`,
+          source: proxyId,
+          target: kw.id,
+          ...MAP_EDGE_STYLE,
+          style: { stroke: 'rgba(255,255,255,0.08)', strokeWidth: 0.8, strokeDasharray: '3 4' },
+        });
+      });
+    });
+
     const rootNode = {
       id: rootId,
       type: 'concept',
       position: { x: 0, y: 0 },
       data: {
-        title: inputValue.trim(),
-        concept: `Root research node for "${inputValue.trim()}". Click + to begin exploring sub-topics.`,
+        title: topic,
+        concept: `Central research topic. ${clusters.length} thematic clusters identified. Explore any cluster to dive deeper.`,
         trl: 9,
         sourceReliability: 'High' as const,
         depth: 0,
@@ -280,11 +433,10 @@ function EditorCanvas() {
       },
     };
 
-    setNodes([rootNode]);
-    setEdges([]);
-    clusterIndexRef.current = 0;
+    setNodes([rootNode, ...allNewNodes]);
+    setEdges(allNewEdges);
     setInputValue('');
-    setTimeout(() => fitView({ duration: 800, maxZoom: 1.2 }), 100);
+    setTimeout(() => fitView({ duration: 900, padding: 0.12 }), 100);
   };
 
   /** Save graph to localStorage */
