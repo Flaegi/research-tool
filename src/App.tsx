@@ -1,8 +1,9 @@
 // Main application — node-based research environment.
 // Visualizes a research conversation as an interactive knowledge map.
 // ClusterZone nodes define territories; ConceptNode cards show research items.
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Activity, Sparkles, Sun, Moon, Save, Layers, FolderOpen } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Activity, Sparkles, Sun, Moon, Save, Layers, FolderOpen, Settings, X, Key } from 'lucide-react';
+import { fetchClustersFromGemini, GEMINI_KEY_STORAGE } from './gemini-api';
 import { useTheme } from 'next-themes';
 import { ViewModeContext } from './context';
 import {
@@ -211,6 +212,12 @@ function EditorCanvas() {
   const [edges, setEdges] = useState<any[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [isResearching, setIsResearching] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKey, setApiKey] = useState<string>(
+    () => localStorage.getItem(GEMINI_KEY_STORAGE) ?? ''
+  );
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const clusterIndexRef = useRef(0);
 
   const { theme, setTheme } = useTheme();
@@ -306,22 +313,46 @@ function EditorCanvas() {
   }, [fitView]);
 
   /**
-   * Builds the full InfraNodus-style cluster map when user submits a topic.
-   * Creates: root node (center) + N thematic zones, each with 2-4 keyword nodes.
-   * Layout is organic: varying radii (500–750px) and slight angle jitter per cluster.
+   * Builds the full InfraNodus-style cluster map.
+   * If a Gemini API key is stored, calls the API for real, topic-specific clusters.
+   * Falls back to the static knowledge database if the API call fails or no key is set.
    */
-  const handleStartResearch = (e: React.FormEvent) => {
+  const handleStartResearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const topic = inputValue.trim();
-    if (!topic) return;
+    if (!topic || isResearching) return;
 
+    setIsResearching(true);
+    setInputValue('');
+
+    let clusters;
+    try {
+      if (apiKey) {
+        clusters = await fetchClustersFromGemini(topic, apiKey);
+        setToast(`Gemini mapped ${clusters.length} clusters ✓`);
+      } else {
+        clusters = getInitialClusters(topic);
+        setToast('Add a Gemini API key for live research → ⚙️');
+      }
+    } catch (err: any) {
+      console.error('Gemini API error:', err);
+      setToast(`API error — using local data: ${err?.message?.slice(0, 60) ?? 'unknown'}`);
+      clusters = getInitialClusters(topic);
+    }
+
+    setIsResearching(false);
+    buildClusterGraph(topic, clusters);
+  };
+
+  /**
+   * Builds all nodes and edges from a cluster definition array.
+   * Extracted so it can be called after both Gemini and fallback paths.
+   */
+  const buildClusterGraph = useCallback((topic: string, clusters: Array<{label: string; keywords: string[]}>) => {
     const rootId = `root-${Date.now()}`;
-    const clusters = getInitialClusters(topic);
     clusterIndexRef.current = 0;
 
-    // Spread clusters with varied radii and angles for organic feel
     const clusterAngleStep = (2 * Math.PI) / clusters.length;
-    // Vary radius between 550 and 750 per cluster
     const radii = clusters.map((_, i) => 580 + ((i * 73) % 180));
 
     const allNewNodes: any[] = [];
@@ -331,13 +362,11 @@ function EditorCanvas() {
       const paletteEntry = CLUSTER_PALETTE[ci % CLUSTER_PALETTE.length];
       clusterIndexRef.current = ci + 1;
 
-      // Cluster center angle: distribute unevenly (slight golden-ratio offset)
       const clusterAngle = clusterAngleStep * ci + ci * 0.15;
       const radius = radii[ci];
       const clusterCx = radius * Math.cos(clusterAngle - Math.PI / 2);
       const clusterCy = radius * Math.sin(clusterAngle - Math.PI / 2);
 
-      // Keyword nodes spread tightly around cluster center
       const kwCount = cluster.keywords.length;
       const kwRadius = 160 + kwCount * 20;
       const kwAngleStep = (1.4 * Math.PI) / Math.max(kwCount - 1, 1);
@@ -365,7 +394,6 @@ function EditorCanvas() {
         };
       });
 
-      // Proxy node: stands at cluster center, represents the cluster label
       const proxyId = `proxy-${Date.now()}-${ci}`;
       const proxyNode = {
         id: proxyId,
@@ -381,7 +409,6 @@ function EditorCanvas() {
         },
       };
 
-      // Zone: fits the cluster proxy + all keywords
       const allX = [...kwNodes.map(n => n.position.x), clusterCx];
       const allY = [...kwNodes.map(n => n.position.y), clusterCy];
       const zoneW = (Math.max(...allX) - Math.min(...allX)) + ZONE_PADDING;
@@ -401,7 +428,6 @@ function EditorCanvas() {
 
       allNewNodes.push(zoneNode, proxyNode, ...kwNodes);
 
-      // Edges: root → proxy, proxy → each keyword
       allNewEdges.push({
         id: `edge-root-${proxyId}`,
         source: rootId,
@@ -435,9 +461,8 @@ function EditorCanvas() {
 
     setNodes([rootNode, ...allNewNodes]);
     setEdges(allNewEdges);
-    setInputValue('');
     setTimeout(() => fitView({ duration: 900, padding: 0.12 }), 100);
-  };
+  }, [fitView, handleExplore]);
 
   /** Save graph to localStorage */
   const handleSave = () => {
@@ -573,8 +598,26 @@ function EditorCanvas() {
               onChange={e => setInputValue(e.target.value)}
               placeholder="New research topic..."
               className="bg-transparent text-white text-sm outline-none w-64 placeholder-gray-600 tracking-tight"
+              disabled={isResearching}
             />
+            <button
+              type="submit"
+              disabled={isResearching || !inputValue.trim()}
+              className="shrink-0 w-5 h-5 flex items-center justify-center text-gray-500 hover:text-indigo-400 transition-colors disabled:opacity-30"
+              title="Start research"
+            >
+              {isResearching ? (
+                <span className="w-3 h-3 rounded-full border border-indigo-400 border-t-transparent animate-spin inline-block" />
+              ) : (
+                <span className="text-lg leading-none">→</span>
+              )}
+            </button>
           </form>
+          {/* Gemini connection dot */}
+          <div className="flex items-center gap-1.5 mt-1.5 justify-center">
+            <span className={`w-1.5 h-1.5 rounded-full ${apiKey ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+            <span className="text-[10px] text-gray-600">{apiKey ? 'Gemini connected' : 'Local mode'}</span>
+          </div>
         </div>
 
         {/* Controls — right */}
@@ -592,6 +635,17 @@ function EditorCanvas() {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>{viewMode === 'detailed' ? 'Cluster' : 'Detail'}</span>
+          </button>
+
+          {/* Settings */}
+          <button
+            onClick={() => setShowSettings(s => !s)}
+            title="API Settings"
+            className={`p-2 rounded-lg border transition-colors text-gray-400 ${
+              showSettings ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400' : 'bg-white/5 hover:bg-white/10 border-white/8'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
           </button>
 
           {/* Save */}
@@ -613,6 +667,74 @@ function EditorCanvas() {
           </button>
         </div>
       </header>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="absolute top-20 right-6 z-30 w-80 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-2xl p-5 shadow-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm font-semibold text-white">Gemini API Key</span>
+            </div>
+            <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-300">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+            Get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-400 underline underline-offset-2">aistudio.google.com</a>. Free tier available. Key is stored locally only.
+          </p>
+          <form
+            onSubmit={(e: React.FormEvent) => {
+              e.preventDefault();
+              const trimmed = apiKeyInput.trim();
+              localStorage.setItem(GEMINI_KEY_STORAGE, trimmed);
+              setApiKey(trimmed);
+              setApiKeyInput('');
+              setShowSettings(false);
+              setToast(trimmed ? 'Gemini API key saved ✓' : 'API key cleared');
+            }}
+            className="flex flex-col gap-3"
+          >
+            <input
+              type="password"
+              value={apiKeyInput}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApiKeyInput(e.target.value)}
+              placeholder={apiKey ? '•••••• (key stored — paste to replace)' : 'AIza...'}
+              className="bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-indigo-500/50 w-full"
+            />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
+              >
+                Save Key
+              </button>
+              {apiKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem(GEMINI_KEY_STORAGE);
+                    setApiKey('');
+                    setToast('API key removed');
+                  }}
+                  className="px-3 py-2 rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 text-xs font-semibold transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Loading overlay — shown while Gemini is processing */}
+      {isResearching && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm pointer-events-none">
+          <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin mb-4" />
+          <p className="text-white/70 text-sm font-medium">Researching with Gemini…</p>
+          <p className="text-gray-500 text-xs mt-1">Mapping semantic clusters</p>
+        </div>
+      )}
 
       {/* Hint when canvas is empty */}
       {nodes.length === 0 && (
