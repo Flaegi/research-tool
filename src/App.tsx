@@ -1,8 +1,8 @@
 // Main application — node-based research environment.
 // Visualizes a research conversation as an interactive knowledge map.
 // ClusterZone nodes define territories; ConceptNode cards show research items.
-import React, { useState, useCallback } from 'react';
-import { Activity, Sparkles, Sun, Moon, Save, Layers } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Activity, Sparkles, Sun, Moon, Save, Layers, FolderOpen } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { ViewModeContext } from './context';
 import {
@@ -15,6 +15,8 @@ import { ConceptNode } from './components/concept-node';
 import { ClusterZone } from './components/cluster-zone';
 
 // ----- Constants -----
+
+const STORAGE_KEY = 'research-tool-graph-v1';
 
 /** Muted cartographic palette — like map biomes, no neon */
 const CLUSTER_PALETTE: Array<{ color: string; pattern: 'diagonal' | 'dots' | 'crosshatch' | 'waves' | 'none' }> = [
@@ -45,7 +47,6 @@ const ZONE_PADDING = 280;
  */
 const expandTopic = (topic: string, depth: number = 0): string[] => {
   const t = topic.toLowerCase();
-  // Domain-specific expansions for common seeds
   const expansions: Record<string, string[]> = {
     quantum: ['Quantum Entanglement', 'Quantum Decoherence', 'Topological Qubits', 'Quantum Error Correction'],
     biology: ['Epigenetics', 'Synthetic Biology', 'Proteomics', 'Microbiome Dynamics'],
@@ -55,9 +56,12 @@ const expandTopic = (topic: string, depth: number = 0): string[] => {
     neuro: ['Predictive Coding', 'Neuroplasticity', 'Default Mode Network', 'Synaptic Pruning'],
     space: ['Orbital Mechanics', 'Dark Matter Distribution', 'Exoplanet Atmospheres', 'Solar Wind Dynamics'],
     evolution: ['Punctuated Equilibrium', 'Sexual Selection', 'Horizontal Gene Transfer', 'Niche Construction'],
+    consciousness: ['Global Workspace Theory', 'Integrated Information', 'Phenomenal Binding', 'Neural Correlates'],
+    language: ['Morphosyntax', 'Semantic Compositionality', 'Embodied Cognition', 'Proto-Language Origins'],
+    energy: ['Solid-State Batteries', 'Fusion Confinement', 'Grid-Scale Storage', 'Thermoelectric Efficiency'],
+    material: ['Metamaterials', 'Topological Insulators', 'Amorphous Alloys', 'Self-Healing Polymers'],
   };
 
-  // Find a matching key
   const matchKey = Object.keys(expansions).find(k => t.includes(k));
   if (matchKey) return expansions[matchKey];
 
@@ -68,8 +72,49 @@ const expandTopic = (topic: string, depth: number = 0): string[] => {
   return suffixes.slice(0, 4).map(s => `${root} — ${s}`);
 };
 
+/**
+ * Returns 2-3 smart explore suggestions for a given node topic.
+ * Shown as quick-action chips in the node header after expansion.
+ */
+const getSuggestedDirections = (topic: string): string[] => {
+  const t = topic.toLowerCase();
+  if (t.includes('quantum')) return ['Measure effects', 'Compare models', 'Find applications'];
+  if (t.includes('ai') || t.includes('model')) return ['Trace limitations', 'Compare architectures', 'Find edge cases'];
+  if (t.includes('climate') || t.includes('carbon')) return ['Scale projections', 'Policy links', 'Opposing views'];
+  if (t.includes('bio') || t.includes('gene')) return ['Clinical trials', 'Ethical implications', 'Evolutionary roots'];
+  return ['Zoom out', 'Find contradictions', 'Historical perspective'];
+};
+
 const generateNodeConcept = (title: string): string => {
   return `Research node exploring the structural and conceptual dimensions of "${title}". Click + to dive deeper and generate sub-hypotheses.`;
+};
+
+// ----- Persistence helpers -----
+
+/**
+ * Saves the current graph state to localStorage.
+ * Strips functions from node data before serialization.
+ */
+const saveGraph = (nodes: any[], edges: any[]) => {
+  const stripped = nodes.map(n => ({
+    ...n,
+    data: { ...n.data, onExplore: undefined },
+  }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: stripped, edges }));
+};
+
+/**
+ * Loads graph state from localStorage.
+ * Returns null if nothing is stored.
+ */
+const loadGraph = (): { nodes: any[]; edges: any[] } | null => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 };
 
 // ----- Node Types -----
@@ -79,6 +124,20 @@ const nodeTypes = {
   clusterZone: ClusterZone,
 };
 
+// ----- Toast notification -----
+
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-zinc-900 border border-white/10 text-sm text-gray-300 shadow-xl backdrop-blur-xl animate-fade-in pointer-events-none">
+      {message}
+    </div>
+  );
+}
+
 // ----- Editor Canvas -----
 
 function EditorCanvas() {
@@ -86,11 +145,23 @@ function EditorCanvas() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [edges, setEdges] = useState<any[]>([]);
   const [inputValue, setInputValue] = useState('');
-  // useRef avoids stale closure in handleExplore callback
-  const clusterIndexRef = React.useRef(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const clusterIndexRef = useRef(0);
 
   const { theme, setTheme } = useTheme();
   const { fitView, setViewport } = useReactFlow();
+
+  /**
+   * Re-attaches the onExplore callback after loading from storage
+   * (functions cannot be serialized to JSON).
+   */
+  const rehydrateNodes = useCallback((rawNodes: any[]) => {
+    return rawNodes.map(n => ({
+      ...n,
+      data: { ...n.data, onExplore: handleExplore },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Core expand function — called when user clicks "+" on a node.
@@ -105,15 +176,14 @@ function EditorCanvas() {
       const parentTitle: string = parentNode.data.title;
       const parentDepth: number = parentNode.data.depth ?? 0;
       const suggestions = expandTopic(parentTitle, parentDepth);
+      const exploreHints = getSuggestedDirections(parentTitle);
 
-      // Pick cluster palette (cycle through)
       const paletteEntry = CLUSTER_PALETTE[clusterIndexRef.current % CLUSTER_PALETTE.length];
       clusterIndexRef.current += 1;
       const zoneId = `zone-${nodeId}-${Date.now()}`;
 
       const angleStep = (2 * Math.PI) / suggestions.length;
-      const angleOffset = -Math.PI / 2; // start top
-      // Decrease radius with depth: root=500, depth1=400, depth2=320...
+      const angleOffset = -Math.PI / 2;
       const spawnRadius = BASE_SPAWN_RADIUS * Math.pow(0.8, parentDepth);
 
       const childNodes = suggestions.map((suggestion, i) => {
@@ -136,7 +206,16 @@ function EditorCanvas() {
         };
       });
 
-      // Dynamic zone sizing: fit to actual bounding box of children
+      // Update parent node to show explore hints
+      const updatedParent = {
+        ...parentNode,
+        data: {
+          ...parentNode.data,
+          subtopics: exploreHints,
+          onExplore: handleExplore,
+        },
+      };
+
       const xs = childNodes.map(n => n.position.x);
       const ys = childNodes.map(n => n.position.y);
       const minX = Math.min(...xs);
@@ -162,10 +241,9 @@ function EditorCanvas() {
         draggable: true,
       };
 
-      // New edges: parent → children (map road style)
       setEdges((eds) => [
         ...eds,
-        ...childNodes.map((child, i) => ({
+        ...childNodes.map((child) => ({
           id: `edge-${nodeId}-${child.id}`,
           source: nodeId,
           target: child.id,
@@ -173,11 +251,10 @@ function EditorCanvas() {
         })),
       ]);
 
-      // Copy research prompt to clipboard for chat integration
       const prompt = `Researche das Thema "${parentTitle}" in der Tiefe. Leite daraus folgende Unterthemen her: ${suggestions.join(', ')}. Gib mir zu jedem eine kurze, präzise Research-Erklärung.`;
       navigator.clipboard.writeText(prompt).catch(() => {});
 
-      return [zoneNode, ...childNodes, ...nds];
+      return [zoneNode, ...childNodes, ...nds.filter(n => n.id !== nodeId), updatedParent];
     });
 
     setTimeout(() => fitView({ duration: 900, padding: 0.15 }), 80);
@@ -208,6 +285,29 @@ function EditorCanvas() {
     clusterIndexRef.current = 0;
     setInputValue('');
     setTimeout(() => fitView({ duration: 800, maxZoom: 1.2 }), 100);
+  };
+
+  /** Save graph to localStorage */
+  const handleSave = () => {
+    saveGraph(nodes, edges);
+    setToast('Graph saved ✓');
+  };
+
+  /** Load graph from localStorage */
+  const handleLoad = () => {
+    const saved = loadGraph();
+    if (!saved) {
+      setToast('Nothing saved yet');
+      return;
+    }
+    const rehydrated = saved.nodes.map(n => ({
+      ...n,
+      data: { ...n.data, onExplore: handleExplore },
+    }));
+    setNodes(rehydrated);
+    setEdges(saved.edges);
+    setTimeout(() => fitView({ duration: 800, padding: 0.15 }), 100);
+    setToast('Graph loaded ✓');
   };
 
   const onNodesChange = useCallback(
@@ -297,10 +397,13 @@ function EditorCanvas() {
 
       {/* Header */}
       <header className="absolute top-0 left-0 right-0 px-6 py-5 flex justify-between items-center z-20 pointer-events-none">
-        {/* Logo */}
+        {/* Logo — matches favicon */}
         <div className="flex items-center gap-3 pointer-events-auto">
-          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-white/70" />
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #9333ea)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
+          >
+            <Activity className="w-4 h-4 text-white" />
           </div>
           <span className="text-sm font-semibold text-white/60 tracking-wide">Research Map</span>
         </div>
@@ -339,8 +442,22 @@ function EditorCanvas() {
             <span>{viewMode === 'detailed' ? 'Cluster' : 'Detail'}</span>
           </button>
 
-          <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 transition-colors text-gray-400">
+          {/* Save */}
+          <button
+            onClick={handleSave}
+            title="Save graph"
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 transition-colors text-gray-400 hover:text-indigo-400"
+          >
             <Save className="w-4 h-4" />
+          </button>
+
+          {/* Load */}
+          <button
+            onClick={handleLoad}
+            title="Load saved graph"
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 transition-colors text-gray-400 hover:text-indigo-400"
+          >
+            <FolderOpen className="w-4 h-4" />
           </button>
         </div>
       </header>
@@ -351,9 +468,15 @@ function EditorCanvas() {
           <div className="text-center">
             <p className="text-gray-600 text-sm font-medium">Enter a research topic above to begin</p>
             <p className="text-gray-700 text-xs mt-1">Click + on any node to explore deeper</p>
+            {loadGraph() && (
+              <p className="text-indigo-500/60 text-xs mt-3">↑ Load your saved session from the toolbar</p>
+            )}
           </div>
         </div>
       )}
+
+      {/* Toast notifications */}
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
   );
 }
