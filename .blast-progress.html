@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="refresh" content="5">
+<title>BLAST – Research Tool</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #fafafa;
+    color: #1a1a1a;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+
+  .header {
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #1a1a1a;
+  }
+
+  .header .project-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #999;
+    margin-top: 4px;
+  }
+
+  .header .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #1a1a1a;
+    color: #fff;
+  }
+
+  .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccff00; /* Neon yellow */
+    box-shadow: 0 0 8px rgba(204, 255, 0, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.4); }
+  }
+
+  /* Wrap Up Card */
+  .wrap-up-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+  }
+
+  .wrap-up-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .wrap-up-card h3::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 14px;
+    background: #ccff00;
+    border-radius: 2px;
+  }
+  
+  .wrap-up-card p {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+
+  .wrap-up-card strong {
+    color: #1a1a1a;
+    font-weight: 600;
+  }
+
+  /* Phase Timeline */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .phase {
+    position: relative;
+    padding-left: 40px;
+    padding-bottom: 28px;
+  }
+
+  .phase:last-child { padding-bottom: 0; }
+
+  /* Vertical line */
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 28px;
+    bottom: 0;
+    width: 2px;
+    background: #e5e5e5;
+  }
+
+  .phase:last-child::before { display: none; }
+
+  .phase.completed::before { background: #1a1a1a; }
+  .phase.active::before { background: linear-gradient(to bottom, #1a1a1a 0%, #e5e5e5 100%); }
+
+  /* Circle indicator */
+  .phase-circle {
+    position: absolute;
+    left: 4px;
+    top: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #e5e5e5;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+  }
+
+  .phase.completed .phase-circle {
+    border-color: #1a1a1a;
+    background: #1a1a1a;
+  }
+
+  .phase.completed .phase-circle::after {
+    content: '✓';
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .phase.active .phase-circle {
+    border-color: #1a1a1a;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(26, 26, 26, 0.1);
+  }
+
+  .phase.active .phase-circle::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #1a1a1a;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .phase-letter {
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .phase.active .phase-letter { color: #1a1a1a; }
+  .phase.completed .phase-letter { color: #1a1a1a; }
+
+  .phase-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+  }
+
+  .phase.active .phase-title { color: #1a1a1a; }
+  .phase.completed .phase-title { color: #1a1a1a; }
+
+  /* Tasks */
+  .tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .task {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #888;
+  }
+
+  .task.done { color: #aaa; }
+  .task.done .task-text { text-decoration: line-through; }
+  .task.current { color: #1a1a1a; font-weight: 500; }
+
+  .task-dot {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid #ddd;
+    background: #fff;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .task.done .task-dot {
+    border-color: #1a1a1a;
+    background: #1a1a1a;
+  }
+
+  .task.done .task-dot::after {
+    content: '✓';
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .task.current .task-dot {
+    border-color: #e5e5e5;
+    background: #fff;
+  }
+
+  .task.current .task-dot::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccff00;
+    box-shadow: 0 0 6px rgba(204, 255, 0, 0.4);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* Progress bar */
+  .progress-bar-container {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #eee;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 500;
+    color: #999;
+    margin-bottom: 8px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: #eee;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: #ccff00;
+    border-radius: 2px;
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .updated {
+    margin-top: 16px;
+    font-size: 11px;
+    color: #ccc;
+    text-align: right;
+  }
+  /* Agent Options */
+  .agent-options {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    padding: 16px;
+    background: #fdfdfd;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    margin-left: 24px;
+  }
+  .agent-options-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .agent-options-title span.badge {
+    background: #ccff00;
+    color: #1a1a1a;
+    padding: 4px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 800;
+  }
+  .options-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .option-btn {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    color: #1a1a1a;
+    transition: all 0.2s;
+  }
+  .option-btn:hover {
+    border-color: #1a1a1a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  .option-btn.selected {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  #copy-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1a1a1a;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  #copy-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+    <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #9333ea); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+    </div>
+    <h1 style="font-size: 20px;">BLAST Progress <span style="font-weight: 300; color: #6b7280; margin: 0 6px;">//</span> Research Tool</h1>
+  </div>
+  <div class="status-badge active" style="display: inline-flex;">
+    <span class="pulse"></span>
+    Phase A — Architecture (Zoom-In Summary)
+  </div>
+</div>
+
+<div class="wrap-up-card">
+  <h3>Blueprint Spec Wrap-Up (Review)</h3>
+  <p><strong>Goal:</strong> AI-Pair Brainstorming Graph for live ideation in Antigravity.</p>
+  <p><strong>Style:</strong> Clean Dashboard, White Monochrome, Nothing-inspired. Frosty glass elements for depth dots.</p>
+  <p><strong>Architecture:</strong> HTML/Vanilla JS + D3.js (Force Layout). 10-Dot Progressive Depth system on each node.</p>
+  <p><strong>Data Flow:</strong> 1 Graph = 1 BLAST Project (isolated JSON persistence). "Knowledge Loop" exports key insights to NotebookLM upon project completion.</p>
+  <p style="margin-top: 12px; color: #1a1a1a;"><em>Ready for Phase L & A? (HARD GATE)</em></p>
+</div>
+
+<div class="timeline">
+
+  <!-- Phase 0 -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">0</span>
+      <span class="phase-title">Initialization</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Projektkontext erfasst</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Scope definiert</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Ordner scaffolded</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">README.md geschrieben</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Zusammenfassung bestätigt</span></div>
+    </div>
+  </div>
+
+  <!-- Phase B -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">B</span>
+      <span class="phase-title">Blueprint</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Anwendungsfall → AI-Pair-Brainstorming + Quellen</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Plattform → Antigravity Artifact</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Graph-Typ → Force-directed mit Clustering</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Node-Tiefe → Progressive Depth, Glass-Dots (10)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Visueller Style → White, Nothing-inspired</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Quellen-Integration → On-demand + Knowledge Export</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Knowledge Loop → NotebookLM am Projekt-Ende</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Graph-Persistenz → Ein Graph pro Projekt</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Interaktions-Modell finalisiert</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Design zusammengefasst & Spec geschrieben</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">User Spec Review (HARD GATE)</span></div>
+    </div>
+  </div>
+
+  <!-- Phase L -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">L</span>
+      <span class="phase-title">Links, Referenzen & UX Handover</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Dependencies integriert (@xyflow/react, lucide)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Code Handover: Glassmorphism UI injiziert</span></div>
+    </div>
+  </div>
+
+  <!-- Phase S -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">S</span>
+      <span class="phase-title">Stylization (Vorgezogen)</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Semantic Zoom Flow (Detail vs. Cluster View)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Frosted Glass Concept Nodes (Landscape/Vertical)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Thematisches Color/Cluster System implentiert</span></div>
+    </div>
+  </div>
+
+  <!-- Phase A -->
+  <div class="phase active">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">A</span>
+      <span class="phase-title">Architecture (Logic &amp; Data)</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Dynamische Node-Generierung (handleExplore + radial layout)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Suchfeld (Research Topic Input Bar)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Synergy-Analysis beim Node-Wiring (LLM stub)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Cluster View Redesign (InfraNodus-Analyse)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Projekt-Ordnerstruktur bereinigen</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Favicon-Farbe auf Schwarz anpassen</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Autostart Clustering (Dynamic GenAI)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Gemini API Anbindung (gemini-2.5-flash via v1)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Node Anchoring (parentId/extent) in Cluster Zones</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Focus-Zoom per Zone (Isolation + Dimming)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Suchfeld Textfarbe → Schwarz (Light Mode Fix)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Node Layout: Titel → Inhalt → Metadata Footer</span></div>
+
+      <!-- NEW: Feature Expansion Tasks -->
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A1: Fix doppelter Text bei Sub-Sub-Topic Karten</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A2: Initial = Nur Titel (kein Concept-Text bis "Explain")</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A3: "Explain" Button → Gemini Beschreibung on-demand</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A4: Depth-Stacking Visualisierung (Karten-Stapel zeigt Explorationstiefe)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A5: "+" auf Sub-Topic → gleiche Zone erweitern (keine neue)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A6: "+" auf Hauptthema → neue Sub-Topics + neue Zones</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A7: Progressive Metadata (mehr Text mit Tiefe, Quellen aufklappbar)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A8: Dickeres Frosted Glass (Panel-Style = Suchbalken-Ästhetik)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A9: Z-Index Setup & Linien-Routing optimiert (Kürzeste Strecke)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A10: Auto-Image Gen (Root + Sub-Topics automatisch)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A11: Image Style: Cleane Product Shots, Uni BG, Soft Shadow</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A11b: Echte URLs/Quellen aus Gemini extrahiert & formatiert</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A12: Synergy Research — Zwei Nodes verbinden → Combined Research</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A13: Bugfix App.tsx (handleExplain übergibt echten Title statt Node-ID)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A14: UI-Update index.css (.react-flow__handle auf Frosted-Glass Look, dezent & blur)</span></div>
+      <div class="task current"><span class="task-dot"></span><span class="task-text">A12: Synergy Research — Zwei Nodes verbinden → Combined Research</span></div>
+      <div class="agent-options">
+        <div class="agent-options-title">
+          Optionen für A12 (Synergy Research)
+          <span class="badge">Tipp: Gemini 2.0 Flash | Planning Mode</span>
+        </div>
+        <div class="options-grid">
+          <button class="option-btn" onclick="triggerAction(this, 'a12_opt_a', 'Ich wähle Option A (Edge-Analysis) für A12. Bitte umsetzen.')">Option A: Edge-Analysis (Bestehende Kanten analysieren)</button>
+          <button class="option-btn" onclick="triggerAction(this, 'a12_opt_b', 'Ich wähle Option B (Multi-Selection) für A12. Bitte umsetzen.')">Option B: Multi-Selection (Recherche für Markierte Nodes)</button>
+        </div>
+      </div>
+      <div class="task"><span class="task-dot"></span><span class="task-text">Local JSON Graph-Persistenz</span></div>
+      <div class="task"><span class="task-dot"></span><span class="task-text">Export zu NotebookLM (Knowledge Loop)</span></div>
+    </div>
+  </div>
+
+
+  <!-- Phase T -->
+  <div class="phase">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">T</span>
+      <span class="phase-title">Trigger & Deploy</span>
+    </div>
+    <div class="tasks">
+      <div class="task"><span class="task-dot"></span><span class="task-text">Ordner Audit & Build Check</span></div>
+      <div class="task"><span class="task-dot"></span><span class="task-text">Export zu Knowledge Loop (NotebookLM)</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="progress-bar-container">
+  <div class="progress-label">
+    <span>Gesamtfortschritt</span>
+    <span>47 / 50</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: 100%"></div>
+  </div>
+</div>
+
+<div class="updated">Aktualisiert: Live-Sync (Auto-Update aktiv)</div>
+
+<div id="copy-toast">Prompt kopiert! Füge ihn in den Chat ein 👇</div>
+
+<script>
+  // triggerAction: writes to localStorage AND copies prompt to clipboard
+  function triggerAction(btn, actionKey, commandText) {
+    // Visual feedback
+    document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+
+    // Write event to localStorage so the app or any polling mechanism can react
+    const event = { action: actionKey, prompt: commandText, ts: Date.now() };
+    localStorage.setItem('blast_action', JSON.stringify(event));
+
+    // Copy to clipboard for manual paste into chat
+    navigator.clipboard.writeText(commandText).then(() => {
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }).catch(() => {
+      // Fallback: show toast anyway
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    });
+  }
+
+  // Legacy support
+  function selectOption(btn, commandText) {
+    triggerAction(btn, 'legacy', commandText);
+  }
+</script>
+
+</body>
+</html>

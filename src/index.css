@@ -74,3 +74,52 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* ── React Flow z-index layering ── */
+/* Zones (hatched backgrounds) always behind everything */
+.react-flow__node-clusterZone {
+  z-index: -1 !important;
+}
+
+/* Edge lines always behind concept panels */
+.react-flow__edges {
+  z-index: 0 !important;
+}
+
+/* Concept node panels always in foreground */
+.react-flow__node-concept {
+  z-index: 10 !important;
+}
+
+/* Handles: Now always visible as requested */
+.react-flow__handle {
+  z-index: 20 !important;
+  opacity: 1; /* Always visible */
+  width: 12px !important;
+  height: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.08), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: auto; /* Always interactive */
+}
+
+/* Base style when NOT doing anything special */
+.react-flow__handle:hover {
+  transform: scale(1.4);
+  background-color: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Highlight the handle being hovered during connection */
+.react-flow.connecting .react-flow__handle:hover {
+  transform: scale(1.6);
+  background-color: #ccff00 !important;
+  border-color: #ccff00 !important;
+  box-shadow: 0 0 15px rgba(204, 255, 0, 0.4);
+}

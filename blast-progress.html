@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<!-- Anti-FOUC: set background before CSS loads to prevent white flash on reload -->
+<script>
+  (function() {
+    var t = localStorage.getItem('blast-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.style.background = t === 'dark' ? '#0e0e0e' : '#fafafa';
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Research Tool — BLAST Progress</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Flash prevention — must be first rule, matched by inline script */
+  html[data-theme="light"] { background: #fafafa; }
+  html[data-theme="dark"]  { background: #0e0e0e; }
+
+  :root[data-theme="light"] {
+    --bg: #fafafa;
+    --card-bg: #fff;
+    --card-border: #e5e5e5;
+    --text: #1a1a1a;
+    --text-muted: #999;
+    --text-dim: #888;
+    --text-link: #666;
+    --accent: #ccff00;
+    --accent-glow: rgba(204, 255, 0, 0.5);
+    --accent-ring: rgba(26, 26, 26, 0.1);
+    --circle-done-bg: #1a1a1a;
+    --circle-done-border: #1a1a1a;
+    --line-done: #1a1a1a;
+    --line-pending: #e5e5e5;
+    --task-dot-border: #ddd;
+    --task-dot-bg: #fff;
+    --progress-track: #eee;
+    --option-bg: #fff;
+    --option-border: #e5e5e5;
+    --option-hover-border: #1a1a1a;
+    --option-hover-shadow: rgba(0,0,0,0.05);
+    --options-bg: #fdfdfd;
+    --badge-bg: #ccff00;
+    --badge-text: #1a1a1a;
+    --toast-bg: #1a1a1a;
+    --toast-text: #fff;
+    --toggle-bg: #f0f0f0;
+    --toggle-border: #e5e5e5;
+    --toggle-text: #666;
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0e0e0e;
+    --card-bg: #1a1a1e;
+    --card-border: #2a2a2e;
+    --text: #e4e4e7;
+    --text-muted: #71717a;
+    --text-dim: #52525b;
+    --text-link: #a1a1aa;
+    --accent: #ccff00;
+    --accent-glow: rgba(204, 255, 0, 0.35);
+    --accent-ring: rgba(204, 255, 0, 0.15);
+    --circle-done-bg: #e4e4e7;
+    --circle-done-border: #e4e4e7;
+    --line-done: #52525b;
+    --line-pending: #27272a;
+    --task-dot-border: #3f3f46;
+    --task-dot-bg: #18181b;
+    --progress-track: #27272a;
+    --option-bg: #18181b;
+    --option-border: #2a2a2e;
+    --option-hover-border: #e4e4e7;
+    --option-hover-shadow: rgba(0,0,0,0.2);
+    --options-bg: #141418;
+    --badge-bg: #ccff00;
+    --badge-text: #0e0e0e;
+    --toast-bg: #e4e4e7;
+    --toast-text: #0e0e0e;
+    --toggle-bg: #1a1a1e;
+    --toggle-border: #2a2a2e;
+    --toggle-text: #a1a1aa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px;
+    min-height: 100vh;
+    transition: background .2s, color .2s;
+  }
+
+  .header { margin-bottom: 24px; }
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .header .project-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .header .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  /* Theme toggle */
+  .toggle-btn {
+    padding: 6px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--toggle-border);
+    background: var(--toggle-bg);
+    color: var(--toggle-text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .toggle-btn:hover { border-color: var(--text); color: var(--text); }
+
+  .pulse {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.4); }
+  }
+
+  /* Wrap Up Card */
+  .wrap-up-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+  }
+
+  .wrap-up-card h3 {
+    font-size: 14px; font-weight: 700;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .wrap-up-card h3::before {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .wrap-up-card p {
+    font-size: 13px;
+    color: var(--text-link);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+
+  .wrap-up-card strong { color: var(--text); font-weight: 600; }
+
+  /* Phase Timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+
+  .phase {
+    position: relative;
+    padding-left: 40px;
+    padding-bottom: 28px;
+  }
+
+  .phase:last-child { padding-bottom: 0; }
+
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: 13px; top: 28px; bottom: 0;
+    width: 2px;
+    background: var(--line-pending);
+  }
+
+  .phase:last-child::before { display: none; }
+  .phase.completed::before { background: var(--line-done); }
+  .phase.active::before { background: linear-gradient(to bottom, var(--line-done) 0%, var(--line-pending) 100%); }
+
+  .phase-circle {
+    position: absolute;
+    left: 4px; top: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--line-pending);
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1;
+  }
+
+  .phase.completed .phase-circle {
+    border-color: var(--circle-done-border);
+    background: var(--circle-done-bg);
+  }
+
+  .phase.completed .phase-circle::after {
+    content: '\2713';
+    color: var(--bg);
+    font-size: 11px; font-weight: 700;
+  }
+
+  .phase.active .phase-circle {
+    border-color: var(--text);
+    background: var(--bg);
+    box-shadow: 0 0 0 4px var(--accent-ring);
+  }
+
+  .phase.active .phase-circle::after {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text);
+  }
+
+  .phase-header {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .phase-letter {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .phase.active .phase-letter,
+  .phase.completed .phase-letter { color: var(--text); }
+
+  .phase-title {
+    font-size: 14px; font-weight: 600;
+    color: var(--text-link);
+  }
+
+  .phase.active .phase-title,
+  .phase.completed .phase-title { color: var(--text); }
+
+  /* Tasks */
+  .tasks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+  .task {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; line-height: 1.4;
+    color: var(--text-dim);
+  }
+
+  .task.done { color: var(--text-muted); }
+  .task.done .task-text { text-decoration: line-through; }
+  .task.current { color: var(--text); font-weight: 500; }
+
+  .task-dot {
+    flex-shrink: 0;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--task-dot-border);
+    background: var(--task-dot-bg);
+    margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .task.done .task-dot {
+    border-color: var(--circle-done-border);
+    background: var(--circle-done-bg);
+  }
+
+  .task.done .task-dot::after {
+    content: '\2713';
+    color: var(--bg);
+    font-size: 9px; font-weight: 700;
+  }
+
+  .task.current .task-dot {
+    border-color: var(--card-border);
+    background: var(--task-dot-bg);
+  }
+
+  .task.current .task-dot::after {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* Progress bar */
+  .progress-bar-container {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--card-border);
+  }
+
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--progress-track);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .updated {
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  /* Agent Options */
+  .agent-options {
+    margin-top: 16px; margin-bottom: 8px;
+    padding: 16px;
+    background: var(--options-bg);
+    border: 1px solid var(--text);
+    border-radius: 8px;
+    margin-left: 24px;
+  }
+
+  .agent-options-title {
+    font-size: 13px; font-weight: 700;
+    margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .agent-options-title span.badge {
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    padding: 4px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 800;
+  }
+
+  .options-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .option-btn {
+    background: var(--option-bg);
+    border: 1px solid var(--option-border);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--text);
+    transition: all 0.2s;
+  }
+
+  .option-btn:hover {
+    border-color: var(--option-hover-border);
+    box-shadow: 0 2px 4px var(--option-hover-shadow);
+  }
+
+  .option-btn.selected {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  #copy-toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--toast-bg); color: var(--toast-text);
+    padding: 12px 24px;
+    border-radius: 100px;
+    font-size: 13px; font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none; z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+
+  #copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* Context Health — sticky bottom banner */
+  .context-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+    border-top: 1px solid transparent;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: background .3s, border-color .3s;
+  }
+
+  .context-bar.health-ok   { background: rgba(240,253,244,.92); border-color: #bbf7d0; color: #166534; }
+  .context-bar.health-warn { background: rgba(255,251,235,.94); border-color: #fde68a; color: #92400e; }
+  .context-bar.health-crit { background: rgba(254,242,242,.96); border-color: #fca5a5; color: #7f1d1d; }
+
+  [data-theme="dark"] .context-bar.health-ok   { background: rgba(5,46,22,.9);  border-color: #15803d; color: #86efac; }
+  [data-theme="dark"] .context-bar.health-warn { background: rgba(69,26,3,.9);  border-color: #b45309; color: #fcd34d; }
+  [data-theme="dark"] .context-bar.health-crit { background: rgba(69,10,10,.9); border-color: #b91c1c; color: #fca5a5; }
+
+  .context-bar .ctx-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .health-ok   .ctx-dot { background: #22c55e; }
+  .health-warn .ctx-dot { background: #f59e0b; }
+  .health-crit .ctx-dot { background: #ef4444; animation: pulse 1.2s ease-in-out infinite; }
+
+  .context-bar .ctx-step { opacity: .6; margin-left: 4px; }
+
+  .context-bar .ctx-action {
+    margin-left: auto;
+    padding: 4px 12px;
+    border-radius: 100px;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    opacity: .85;
+    transition: opacity .15s;
+    white-space: nowrap;
+  }
+  .context-bar .ctx-action:hover { opacity: 1; }
+
+  /* Push content above sticky bar */
+  body { padding-bottom: 56px; }
+
+  .footer-note {
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .wait-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-row">
+    <div class="header-left">
+      <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #9333ea); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+      </div>
+      <h1>Research Tool <span style="font-weight: 300; color: var(--text-muted); margin: 0 6px;">//</span> BLAST Progress</h1>
+    </div>
+    <button class="toggle-btn" onclick="toggleTheme()" id="toggle-btn">Dark Mode</button>
+  </div>
+  <div class="status-badge active" style="display: inline-flex;">
+    <span class="pulse"></span>
+    Phase A — Architecture (UI/UX Refinement)
+  </div>
+</div>
+
+<div class="wrap-up-card">
+  <h3>Session Wrap-Up (27. Marz 2026)</h3>
+  <p><strong>Goal:</strong> Revert text expansion, Frosted Dots Footer, Context Health, Auto-Refresh, Umbenennung.</p>
+  <p><strong>Model:</strong> Gemini 2.5 Flash</p>
+  <p><strong>Status:</strong> A23 offen. Context rot — Fresh Window empfohlen.</p>
+  <p><strong>Tokens (ca.):</strong> <span style="font-variant-numeric: tabular-nums; letter-spacing: 0.02em;">~320 000</span> <span style="color: var(--text-muted); font-size: 12px;">(Step 1072 · wird bei jedem Edit aktualisiert)</span></p>
+</div>
+
+<div class="timeline">
+
+  <!-- Phase 0 -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">0</span>
+      <span class="phase-title">Initialization</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Projektkontext erfasst</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Scope definiert</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Ordner scaffolded</span></div>
+    </div>
+  </div>
+
+  <!-- Phase B -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">B</span>
+      <span class="phase-title">Blueprint</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">AI-Pair-Brainstorming Graph spec</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">White monochrome, Nothing-inspired style</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">User Spec Review</span></div>
+    </div>
+  </div>
+
+  <!-- Phase L -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">L</span>
+      <span class="phase-title">Links, Referenzen &amp; UX Handover</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Dependencies integriert (@xyflow/react, lucide)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Glassmorphism UI injiziert</span></div>
+    </div>
+  </div>
+
+  <!-- Phase S -->
+  <div class="phase completed">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">S</span>
+      <span class="phase-title">Stylization</span>
+    </div>
+    <div class="tasks">
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Semantic Zoom Flow (Detail vs. Cluster View)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Frosted Glass Concept Nodes</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Thematisches Color/Cluster System</span></div>
+    </div>
+  </div>
+
+  <!-- Phase A — Active -->
+  <div class="phase active">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">A</span>
+      <span class="phase-title">Architecture (Logic &amp; Stabilization)</span>
+    </div>
+    <div class="tasks">
+      <!-- Previously completed -->
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A1–A9: Core architecture (nodes, clustering, zoom, layout, API)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A10–A14: Images, synergy, handles, metadata</span></div>
+
+      <!-- Current session tasks -->
+      <div class="task done"><span class="task-dot"></span><span class="task-text">Fix: Extension crash (orphaned code block in handleExplore)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A15: Less/More text toggle + Double-click (React.memo comparator fix)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A16: Gemini Sparkles icon removed from Explain button</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A17: New nodes placed on parent zone (zone-relative coordinates)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A18: 3 Frosted-Glass Dots (Dot 2 = Brief, Dot 3 = Deep Explain)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A19: Imagen 3 prompt upgraded (editorial science-magazine style)</span></div>
+
+      <!-- Awaiting confirmation -->
+      <!-- Awaiting confirmation -->
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A20: Double-click Test (Entfällt — wird durch A23 ersetzt)</span></div>
+      
+      <div class="task current"><span class="task-dot"></span><span class="task-text">A23: Redesign Text Expansion & Frosted Dots</span></div>
+      <div class="agent-options">
+        <div class="agent-options-title">
+          Optionen für Frosted Dots (Progressive Depth)
+          <span class="badge">Style: Nothing / Blog Inspired</span>
+        </div>
+        <div class="options-grid">
+          <button class="option-btn" onclick="triggerAction(this, 'a23_top_right', 'Option A: Dots oben rechts im Frame (minimalistisch/fest)')">A: Oben Rechts (Statisch)</button>
+          <button class="option-btn" onclick="triggerAction(this, 'a23_bottom_center', 'Option B: Dots unten mittig im Footer (integriert)')">B: Unten Mittig (Footer)</button>
+          <button class="option-btn" onclick="triggerAction(this, 'a23_floating_left', 'Option C: Dots schwebend links am Rand (Interaktiv-Stil)')">C: Schwebend Links (Gleitend)</button>
+        </div>
+        <div class="wait-note">Wähle A, B oder C für die Platzierung der farblosen Frosted-Dots.</div>
+      </div>
+
+      <div class="task"><span class="task-dot"></span><span class="task-text">A21: Root + click generates new cluster zones</span></div>
+      <div class="task"><span class="task-dot"></span><span class="task-text">A22: Imagen style matching (send reference images)</span></div>
+    </div>
+  </div>
+
+  <!-- Phase T -->
+  <div class="phase">
+    <div class="phase-circle"></div>
+    <div class="phase-header">
+      <span class="phase-letter">T</span>
+      <span class="phase-title">Trigger &amp; Deploy</span>
+    </div>
+    <div class="tasks">
+      <div class="task"><span class="task-dot"></span><span class="task-text">Ordner Audit &amp; Build Check</span></div>
+      <div class="task"><span class="task-dot"></span><span class="task-text">Export zu Knowledge Loop (NotebookLM)</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="progress-bar-container">
+  <div class="progress-label">
+    <span>Gesamtfortschritt</span>
+    <span>53 / 56</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: 95%"></div>
+  </div>
+</div>
+
+
+
+<div id="copy-toast">Prompt kopiert! Einfugen im Chat.</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    document.getElementById('toggle-btn').textContent = isDark ? 'Dark Mode' : 'Light Mode';
+    localStorage.setItem('blast-theme', isDark ? 'light' : 'dark');
+  }
+
+  // Restore saved theme
+  const saved = localStorage.getItem('blast-theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    document.getElementById('toggle-btn').textContent = saved === 'dark' ? 'Light Mode' : 'Dark Mode';
+  }
+
+  function triggerAction(btn, actionKey, commandText) {
+    document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const event = { action: actionKey, prompt: commandText, ts: Date.now() };
+    localStorage.setItem('blast_action', JSON.stringify(event));
+    navigator.clipboard.writeText(commandText).then(() => {
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }).catch(() => {
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    });
+  }
+
+  // --- Context Health (Sticky Banner) ---
+  const CURRENT_STEP = 1000;
+  const STEP_WARN    = 500;
+  const STEP_CRIT    = 700;
+
+  function initContextHealth() {
+    // Inject sticky bar into body
+    const bar = document.createElement('div');
+    bar.id = 'context-bar';
+    bar.className = 'context-bar';
+
+    const dot  = document.createElement('span');
+    dot.className = 'ctx-dot';
+
+    const label = document.createElement('span');
+    const step  = document.createElement('span');
+    step.className = 'ctx-step';
+    step.textContent = `Step ${CURRENT_STEP}`;
+
+    if (CURRENT_STEP < STEP_WARN) {
+      bar.classList.add('health-ok');
+      label.textContent = 'Context OK';
+    } else if (CURRENT_STEP < STEP_CRIT) {
+      bar.classList.add('health-warn');
+      label.textContent = 'Konversation wird lang — bald neues Fenster empfohlen';
+
+      const btn = document.createElement('button');
+      btn.className = 'ctx-action';
+      btn.textContent = 'FRESH WINDOW';
+      btn.onclick = () => {
+        navigator.clipboard.writeText('/finish /Users/dflagmei/.gemini/antigravity/scratch/brainstorm-tool').catch(() => {});
+        btn.textContent = 'Kopiert!';
+        setTimeout(() => btn.textContent = 'FRESH WINDOW', 2000);
+      };
+      bar.append(dot, label, step, btn);
+    } else {
+      bar.classList.add('health-crit');
+      label.textContent = 'Neues Fenster jetzt — Context zu lang, Kosten & Qualität leiden';
+
+      const btn = document.createElement('button');
+      btn.className = 'ctx-action';
+      btn.textContent = 'FRESH WINDOW';
+      btn.onclick = () => {
+        navigator.clipboard.writeText('/finish /Users/dflagmei/.gemini/antigravity/scratch/brainstorm-tool').catch(() => {});
+        btn.textContent = 'Kopiert!';
+        setTimeout(() => btn.textContent = 'FRESH WINDOW', 2000);
+      };
+      bar.append(dot, label, step, btn);
+    }
+
+    if (CURRENT_STEP < STEP_WARN) bar.append(dot, label, step);
+    document.body.appendChild(bar);
+  }
+
+  initContextHealth();
+
+  // Auto-reload: fires every 8s, but because the Anti-FOUC script
+  // sets the background before CSS loads, there is no visible flash.
+  setInterval(function() { location.reload(); }, 8000);
+
+</script>
+
+</body>
+</html>
