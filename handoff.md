@@ -10,6 +10,7 @@
 
 - A15–A19: Kern-Architektur, Zone-relative Node-Platzierung, Imagen 3, Gemini Explain
 - A20: Entfällt (durch A23 ersetzt)
+- **A23**: Redesign Text Expansion & Frosted Dots (Option B: unten mittig, farblos, einfacher Link-Toggle)
 - blast-progress.html komplett neu designed: "Nothing"-Stil, Dark/Light Mode Toggle
 - Context Health Sticky Banner (FRESH WINDOW Button) implementiert
 - Auto-Restart Watcher (`watch-server.sh`) für Dev-Server
@@ -21,12 +22,9 @@
 
 ## Offene Tasks (nächster Start hier)
 
-- **A23** ← NÄCHSTER TASK: Redesign Text Expansion & Frosted Dots
-  - Text Expansion: zurück zum alten "Less/More"-Button (kein Double-Click)
-  - Frosted Glass Dots: **Option B gewählt** — unten mittig im Footer der Karte
-  - Farblos (kein Amber/Emerald), wie beim Blog-Inspirations-Tool (Resizer-Handles)
-- A21: Root "+"-click generiert neue Cluster-Zonen
-- A22: Imagen Stil-Matching (User muss Referenzbilder liefern)
+- **A21**: Root "+"-click generiert neue Cluster-Zonen
+- **A22**: Imagen Stil-Matching (User muss Referenzbilder liefern)
+- A24: Deep Integration of Source Linking (hover to preview snippet)
 
 ---
 

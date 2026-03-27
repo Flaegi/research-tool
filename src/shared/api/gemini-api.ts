@@ -126,7 +126,7 @@ export async function callGeminiText(prompt: string, apiKey: string): Promise<st
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
         },
       }),
     }
@@ -222,12 +222,12 @@ export async function fetchImagenImage(
   prompt: string,
   apiKey: string
 ): Promise<string> {
-  // Editorial science-magazine style: abstract conceptual representation, dramatic lighting
-  const premiumPrompt = `Abstract conceptual visualization of: "${prompt}".
-    Style: Editorial science magazine, dramatic chiaroscuro studio lighting, deep dark charcoal background (#1a1a1a), 
-    one dominant abstract 3D object or data structure representing the concept, volumetric light rays, 
-    subtle blue-violet accent glow, photorealistic materials (glass, polished metal, translucent resin), 
-    8K ultra-sharp, cinematic depth of field, no text, no labels, no humans, no faces.`;
+  // Clean editorial product shot — light gray bg, soft shadows (matches user reference images)
+  const premiumPrompt = `Clean product photography of a conceptual 3D object representing: "${prompt}".
+    Style: Editorial magazine product shot, soft neutral light gray background (#f0f0f0), 
+    centered hero object with subtle rounded corners, soft diffused studio lighting from above, 
+    gentle contact shadow, matte and polished surface materials, minimal composition, 
+    photorealistic render, 8K ultra-sharp, no text, no labels, no humans, no faces, no wireframes.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,

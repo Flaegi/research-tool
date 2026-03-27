@@ -8,6 +8,13 @@
     var t = localStorage.getItem('blast-theme') || 'light';
     document.documentElement.setAttribute('data-theme', t);
     document.documentElement.style.background = t === 'dark' ? '#0e0e0e' : '#fafafa';
+    // Smooth reload: hide body BEFORE it renders to prevent any flash
+    if (sessionStorage.getItem('blast-smooth-reload')) {
+      var s = document.createElement('style');
+      s.id = 'smooth-reload-hide';
+      s.textContent = 'body { opacity: 0 !important; }';
+      document.head.appendChild(s);
+    }
   })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -520,11 +527,11 @@
 </div>
 
 <div class="wrap-up-card">
-  <h3>Session Wrap-Up (27. Marz 2026)</h3>
-  <p><strong>Goal:</strong> Revert text expansion, Frosted Dots Footer, Context Health, Auto-Refresh, Umbenennung.</p>
+  <h3>Session Start (27. März 2026)</h3>
+  <p><strong>Goal:</strong> A23 — Text Expansion (More/Less Toggle) &amp; Frosted Dots Redesign (Option B: Footer, farblos).</p>
   <p><strong>Model:</strong> Gemini 2.5 Flash</p>
-  <p><strong>Status:</strong> Session beendet. Weiter im nächsten Fenster mit A23.</p>
-  <p><strong>Tokens (ca.):</strong> <span style="font-variant-numeric: tabular-nums;">~330 000</span> <span style="color: var(--text-muted); font-size: 12px;">(Step 1088 · Fresh Window empfohlen)</span></p>
+  <p><strong>Status:</strong> Neue Session gestartet. Frisches Fenster — Context OK.</p>
+  <p><strong>Tokens (ca.):</strong> <span style="font-variant-numeric: tabular-nums;">~0</span> <span style="color: var(--text-muted); font-size: 12px;">(Step 1 · Fresh Window)</span></p>
 </div>
 
 <div class="timeline">
@@ -608,19 +615,25 @@
       <!-- Awaiting confirmation -->
       <div class="task done"><span class="task-dot"></span><span class="task-text">A20: Double-click Test (Entfällt — wird durch A23 ersetzt)</span></div>
       
-      <div class="task"><span class="task-dot"></span><span class="task-text">A23: Redesign Text Expansion &amp; Frosted Dots — nächster Task im neuen Fenster</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A23: Redesign Text Expansion &amp; Frosted Dots (Option B: Footer)</span></div>
+      <div class="task done"><span class="task-dot"></span><span class="task-text">A23b: Batch Fix Round 2 — 11 Items (Dots, Synergy Zones, Save/Load, Imagen Style, Sizing)</span></div>
+      
       <div class="agent-options">
         <div class="agent-options-title">
-          Optionen für Frosted Dots (Progressive Depth)
-          <span class="badge">Style: Nothing / Blog Inspired</span>
+          Empfohlenes Modell für A21
+          <span class="badge">Architecture · Cluster Logic</span>
         </div>
         <div class="options-grid">
-          <button class="option-btn" onclick="triggerAction(this, 'a23_top_right', 'Option A: Dots oben rechts im Frame (minimalistisch/fest)')">A: Oben Rechts (Statisch)</button>
-          <button class="option-btn" onclick="triggerAction(this, 'a23_bottom_center', 'Option B: Dots unten mittig im Footer (integriert)')">B: Unten Mittig (Footer)</button>
-          <button class="option-btn" onclick="triggerAction(this, 'a23_floating_left', 'Option C: Dots schwebend links am Rand (Interaktiv-Stil)')">C: Schwebend Links (Gleitend)</button>
+          <button class="option-btn selected" onclick="triggerAction(this, 'model_gemini', 'Gemini 3.1 Pro (Planning)')">
+            ✦ Gemini 3.1 Pro <span style="font-weight:400;opacity:.6;font-size:11px;">· Planning</span>
+          </button>
+          <button class="option-btn" onclick="triggerAction(this, 'model_sonnet', 'Claude Sonnet 4.6 (Planning)')">
+            Claude Sonnet 4.6 <span style="font-weight:400;opacity:.6;font-size:11px;">· Planning</span>
+          </button>
         </div>
-        <div class="wait-note">Wähle A, B oder C für die Platzierung der farblosen Frosted-Dots.</div>
+        <div class="wait-note">Modelle gemäß antigravity-models.md. Fokus: Deep Reasoning.</div>
       </div>
+
 
       <div class="task"><span class="task-dot"></span><span class="task-text">A21: Root + click generates new cluster zones</span></div>
       <div class="task"><span class="task-dot"></span><span class="task-text">A22: Imagen style matching (send reference images)</span></div>
@@ -689,7 +702,7 @@
   }
 
   // --- Context Health (Sticky Banner) ---
-  const CURRENT_STEP = 1088;
+  const CURRENT_STEP = 1;
   const STEP_WARN    = 500;
   const STEP_CRIT    = 700;
 
@@ -744,9 +757,48 @@
 
   initContextHealth();
 
-  // Auto-reload: fires every 8s, but because the Anti-FOUC script
-  // sets the background before CSS loads, there is no visible flash.
-  setInterval(function() { location.reload(); }, 8000);
+  // --- Smart Live Update: only reloads when file changes, zero flicker ---
+  (function() {
+    var lastHash = null;
+
+    function quickHash(str) {
+      var h = 0;
+      for (var i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+      return h;
+    }
+
+    // Fade in if arriving from a smooth reload
+    if (sessionStorage.getItem('blast-smooth-reload')) {
+      sessionStorage.removeItem('blast-smooth-reload');
+      requestAnimationFrame(function() {
+        document.body.style.transition = 'opacity 0.25s ease';
+        requestAnimationFrame(function() {
+          document.body.style.opacity = '1';
+          var hide = document.getElementById('smooth-reload-hide');
+          if (hide) hide.remove();
+        });
+      });
+    }
+
+    async function checkForUpdate() {
+      try {
+        var r = await fetch(location.href, { cache: 'no-store' });
+        var html = await r.text();
+        var h = quickHash(html);
+        if (lastHash === null) { lastHash = h; return; }
+        if (h === lastHash) return;
+
+        // File changed — crossfade reload
+        lastHash = h;
+        sessionStorage.setItem('blast-smooth-reload', '1');
+        document.body.style.transition = 'opacity 0.15s ease';
+        document.body.style.opacity = '0';
+        setTimeout(function() { location.reload(); }, 160);
+      } catch (e) { /* file:// fetch error — silent */ }
+    }
+
+    setInterval(checkForUpdate, 3000);
+  })();
 
 </script>
 

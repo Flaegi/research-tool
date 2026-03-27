@@ -313,25 +313,41 @@ const generateNodeConcept = (title: string): string => {
 
 // ----- Persistence helpers -----
 
+const GRAPHS_INDEX_KEY = 'research-tool-graphs-index';
+
 /**
- * Saves the current graph state to localStorage.
+ * Saves the current graph state to localStorage under a named slot.
  * Strips functions from node data before serialization.
  */
-const saveGraph = (nodes: any[], edges: any[]) => {
+const saveGraph = (name: string, nodes: any[], edges: any[]) => {
   const stripped = nodes.map(n => ({
     ...n,
-    data: { ...n.data, onExplore: undefined },
+    data: { ...n.data, onExplore: undefined, onExplain: undefined },
   }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: stripped, edges }));
+  const key = `research-graph-${name}`;
+  localStorage.setItem(key, JSON.stringify({ nodes: stripped, edges, savedAt: new Date().toISOString() }));
+
+  // Update index
+  const index: string[] = JSON.parse(localStorage.getItem(GRAPHS_INDEX_KEY) ?? '[]');
+  if (!index.includes(name)) {
+    index.push(name);
+    localStorage.setItem(GRAPHS_INDEX_KEY, JSON.stringify(index));
+  }
 };
 
 /**
- * Loads graph state from localStorage.
- * Returns null if nothing is stored.
+ * Lists all saved graph names.
  */
-const loadGraph = (): { nodes: any[]; edges: any[] } | null => {
+const listSavedGraphs = (): string[] => {
+  return JSON.parse(localStorage.getItem(GRAPHS_INDEX_KEY) ?? '[]');
+};
+
+/**
+ * Loads a named graph from localStorage.
+ */
+const loadGraph = (name: string): { nodes: any[]; edges: any[] } | null => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(`research-graph-${name}`);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -522,26 +538,31 @@ function EditorCanvas() {
 
       if (existingZoneId) {
         // A5: Add children to the SAME zone.
-        // Positions must be relative to the zone's top-left corner.
+        // Positions must be relative to the zone's top-left corner,
+        // and clamped so nodes don't escape the zone boundaries.
         const existingZone = nds.find(n => n.id === existingZoneId);
         const zoneX = existingZone?.position?.x ?? 0;
         const zoneY = existingZone?.position?.y ?? 0;
         const zoneW = Number(existingZone?.style?.width ?? 500);
         const zoneH = Number(existingZone?.style?.height ?? 460);
 
-        // The center of the zone in zone-local coords is approx half w/h
-        const localCx = zoneW / 2 + spawnRadius * 0.35 * Math.cos(angleOffset + Math.PI * (clusterIndexRef.current % 2));
-        const localCy = zoneH / 2 + spawnRadius * 0.35 * Math.sin(angleOffset + Math.PI * (clusterIndexRef.current % 2));
+        // Clamp spawn radius: deep nodes should stay comfortably inside zone
+        const clampedRadius = Math.min(spawnRadius, 160);
 
+        // Centre the new children around the parent node (zone-local coords)
+        const localCx = Math.max(clampedRadius + 60, Math.min(zoneW - clampedRadius - 60, nodeAbsX + clampedRadius * 0.4));
+        const localCy = Math.max(clampedRadius + 60, Math.min(zoneH - clampedRadius - 60, nodeAbsY + clampedRadius * 0.4));
+
+        const NODE_W = 180, NODE_H = 100;
         const childNodes = placeholders.map((title, i) => ({
           id: `node-${Date.now()}-${i}`,
           type: 'concept',
           parentId: existingZoneId,
           zIndex: 10,
           position: {
-            // Zone-local positions spread around the local center
-            x: localCx + spawnRadius * 0.45 * Math.cos(angleOffset + angleStep * i),
-            y: localCy + spawnRadius * 0.45 * Math.sin(angleOffset + angleStep * i),
+            // Clamp zone-local positions so children always stay inside zone
+            x: Math.max(40, Math.min(zoneW - NODE_W - 40, localCx + clampedRadius * Math.cos(angleOffset + angleStep * i))),
+            y: Math.max(40, Math.min(zoneH - NODE_H - 40, localCy + clampedRadius * Math.sin(angleOffset + angleStep * i))),
           },
           data: {
             title,
@@ -600,7 +621,7 @@ function EditorCanvas() {
           ...childNodes,
           ...nds.map(n => {
             if (n.id === existingZoneId) {
-              return { ...n, style: { ...n.style, width: Math.max(zoneW, zoneW + 150), height: Math.max(zoneH, zoneH + 150) } };
+              return { ...n, style: { ...n.style, width: Math.max(zoneW, zoneW + 300), height: Math.max(zoneH, zoneH + 300) } };
             }
             if (n.id === nodeId) return updatedParent;
             return n;
@@ -686,7 +707,7 @@ function EditorCanvas() {
       return [zoneNode, ...childNodes, ...nds.filter(n => n.id !== nodeId), updatedParent];
     });
 
-    setTimeout(() => fitView({ duration: 900, padding: 0.15 }), 80);
+    setTimeout(() => fitView({ duration: 900, padding: 0.05 }), 80);
   }, [fitView, apiKey, handleExplain]);
 
   /**
@@ -882,14 +903,13 @@ function EditorCanvas() {
       zIndex: 10,
       data: {
         title: topic,
-        concept: `Central research topic. ${clusters.length} thematic clusters identified. Explore any cluster to dive deeper.`,
+        concept: '',  // Empty until Gemini explains — no placeholder
         trl: 9,
         sourceReliability: 'High' as const,
         depth: 0,
         onExplore: handleExplore,
         onExplain: handleExplain,
-        explained: true,  // root concept is always shown
-        isExpanded: true, // root footer is shown by default
+        explained: false,  // Will be set to true after Gemini responds
       },
     };
 
@@ -918,17 +938,34 @@ function EditorCanvas() {
     setTimeout(() => fitView({ duration: 900, padding: 0.12 }), 100);
   }, [fitView, handleExplore, handleExplain, handleFocusZone, apiKey]);
 
-  /** Save graph to localStorage */
+  /** Save graph to localStorage with a user-chosen name */
   const handleSave = () => {
-    saveGraph(nodes, edges);
-    setToast('Graph saved ✓');
+    const defaultName = localStorage.getItem('research-tool-last-topic') ?? 'untitled';
+    const name = window.prompt('Graph-Name zum Speichern:', defaultName);
+    if (!name) return;
+    saveGraph(name.trim(), nodes, edges);
+    setToast(`"${name.trim()}" gespeichert ✓`);
   };
 
-  /** Load graph from localStorage */
+  /** Load a named graph from localStorage */
   const handleLoad = () => {
-    const saved = loadGraph();
+    const names = listSavedGraphs();
+    if (names.length === 0) {
+      setToast('Keine gespeicherten Graphen vorhanden');
+      return;
+    }
+    const list = names.map((n, i) => `${i + 1}. ${n}`).join('\n');
+    const choice = window.prompt(`Gespeicherte Graphen:\n${list}\n\nNummer eingeben:`);
+    if (!choice) return;
+    const idx = parseInt(choice, 10) - 1;
+    const selectedName = names[idx];
+    if (!selectedName) {
+      setToast('Ungültige Auswahl');
+      return;
+    }
+    const saved = loadGraph(selectedName);
     if (!saved) {
-      setToast('Nothing saved yet');
+      setToast(`"${selectedName}" nicht gefunden`);
       return;
     }
     const rehydrated = saved.nodes.map(n => ({
@@ -937,8 +974,8 @@ function EditorCanvas() {
     }));
     setNodes(rehydrated);
     setEdges(saved.edges);
-    setTimeout(() => fitView({ duration: 800, padding: 0.15 }), 100);
-    setToast('Graph loaded ✓');
+    setTimeout(() => fitView({ duration: 800, padding: 0.05 }), 100);
+    setToast(`"${selectedName}" geladen ✓`);
   };
 
   // --- Autostart Clustering (InfraNodus Style) ---
@@ -949,8 +986,10 @@ function EditorCanvas() {
     if (hasAutoStarted.current) return;
     hasAutoStarted.current = true;
 
-    // 1. Saved graph exists → rehydrate
-    const saved = loadGraph();
+    // 1. Saved graph exists → rehydrate the most recent one
+    const savedNames = listSavedGraphs();
+    const lastSavedName = savedNames.length > 0 ? savedNames[savedNames.length - 1] : null;
+    const saved = lastSavedName ? loadGraph(lastSavedName) : null;
     if (saved && saved.nodes.length > 0) {
       const rehydrated = saved.nodes.map(n => ({
         ...n,
@@ -958,8 +997,8 @@ function EditorCanvas() {
       }));
       setNodes(rehydrated);
       setEdges(saved.edges);
-      setTimeout(() => fitView({ duration: 800, padding: 0.15 }), 100);
-      setToast('Session restored ✓');
+      setTimeout(() => fitView({ duration: 800, padding: 0.05 }), 100);
+      setToast(`"${lastSavedName}" restored ✓`);
       return;
     }
 
@@ -1048,7 +1087,39 @@ function EditorCanvas() {
           explained: true,
         },
       };
-      setNodes(nds => [...nds, synergyNode]);
+
+      // Create synergy zone immediately so node can be reparented
+      const paletteEntry = CLUSTER_PALETTE[clusterIndexRef.current % CLUSTER_PALETTE.length];
+      clusterIndexRef.current += 1;
+      const zoneId = `zone-synergy-${Date.now()}`;
+      const zoneW = 600, zoneH = 520;
+
+      const zoneNode = {
+        id: zoneId,
+        type: 'clusterZone',
+        position: {
+          x: synergyNode.position.x - zoneW / 2 + 100,
+          y: synergyNode.position.y - 80,
+        },
+        style: { width: zoneW, height: zoneH, zIndex: -1 },
+        data: {
+          label: `${srcTitle} × ${tgtTitle}`,
+          color: paletteEntry.color,
+          pattern: paletteEntry.pattern,
+          onFocus: handleFocusZone,
+        },
+        selectable: true,
+        draggable: true,
+      };
+
+      // Reparent synergy node inside the zone
+      const reparentedSynergy = {
+        ...synergyNode,
+        parentId: zoneId,
+        position: { x: zoneW / 2 - 100, y: 60 },
+      };
+
+      setNodes(nds => [zoneNode, reparentedSynergy, ...nds]);
 
       // Async: fetch synergy insights from Gemini
       if (apiKey) {
@@ -1062,21 +1133,18 @@ function EditorCanvas() {
                 : n
             ));
 
-            // Spawn child nodes for each synergy insight
-            const paletteEntry = CLUSTER_PALETTE[clusterIndexRef.current % CLUSTER_PALETTE.length];
-            clusterIndexRef.current += 1;
-            const zoneId = `zone-synergy-${Date.now()}`;
+            // Spawn child nodes into the EXISTING zone (created above)
             const angleStep = (2 * Math.PI) / synergies.length;
             const spawnR = 180;
 
             const childNodes = synergies.map((s, i) => ({
               id: `synergy-child-${Date.now()}-${i}`,
               type: 'concept',
-              parentId: zoneId,
+              parentId: zoneId,  // Use the pre-created zone
               zIndex: 10,
               position: {
-                x: 200 + spawnR * Math.cos(angleStep * i),
-                y: 180 + spawnR * Math.sin(angleStep * i),
+                x: 100 + spawnR * Math.cos(angleStep * i),
+                y: 160 + spawnR * Math.sin(angleStep * i),
               },
               data: {
                 title: s.title,
@@ -1089,25 +1157,7 @@ function EditorCanvas() {
               },
             }));
 
-            const zoneNode = {
-              id: zoneId,
-              type: 'clusterZone',
-              position: {
-                x: synergyNode.position.x - 220,
-                y: synergyNode.position.y + 60,
-              },
-              style: { width: 500, height: 460, zIndex: -1 },
-              data: {
-                label: `${srcTitle} × ${tgtTitle}`,
-                color: paletteEntry.color,
-                pattern: paletteEntry.pattern,
-                onFocus: handleFocusZone,
-              },
-              selectable: true,
-              draggable: true,
-            };
-
-            setNodes(nds => [zoneNode, ...childNodes, ...nds]);
+            setNodes(nds => [...childNodes, ...nds]);
             setEdges(eds => [
               ...eds,
               ...childNodes.map(c => ({
@@ -1119,7 +1169,7 @@ function EditorCanvas() {
             ]);
 
             setToast(`Synergy: ${synergies.length} insights found ✓`);
-            setTimeout(() => fitView({ duration: 800, padding: 0.12 }), 100);
+            setTimeout(() => fitView({ duration: 800, padding: 0.05 }), 100);
           })
           .catch(err => {
             console.error('Synergy research error:', err);
@@ -1376,7 +1426,7 @@ function EditorCanvas() {
               <>
                 <p className="text-gray-500 text-sm font-medium">Type a research topic below</p>
                 <p className="text-gray-700 text-xs mt-1">Gemini will map semantic clusters in real-time</p>
-                {loadGraph() && (
+                {listSavedGraphs().length > 0 && (
                   <p className="text-indigo-500/60 text-xs mt-3">Load your saved session via the toolbar ↗</p>
                 )}
               </>

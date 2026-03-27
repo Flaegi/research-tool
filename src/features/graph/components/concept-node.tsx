@@ -19,7 +19,7 @@ export interface ConceptNodeData {
   depth?: number;  // 0 = root, 1 = cluster proxy, 2+ = keywords
   explained?: boolean;  // true once Gemini has provided an explanation
   isExplaining?: boolean;  // true while waiting for Gemini explanation
-  isExpanded?: boolean;  // toggle for metadata footer and full text view
+  isExpanded?: boolean;  // toggled via double-click in App.tsx — shows metadata footer
   explainLevel?: 1 | 2 | 3;  // 1 = brief, 2 = detailed, 3 = comprehensive
   onExplore?: (nodeId: string) => void;
   onExplain?: (title: string, nodeId: string, level?: 1 | 2 | 3) => void;
@@ -28,13 +28,13 @@ export interface ConceptNodeData {
 /** Derives card dimensions and typography scale from node depth. */
 const getDepthStyle = (depth: number, isOverview: boolean) => {
   if (isOverview) {
-    if (depth === 0) return { width: '800px', titleSize: '56px', titleWeight: '900', px: 'px-10', py: 'py-8', conceptSize: '18px' };
-    if (depth === 1) return { width: '320px', titleSize: '20px', titleWeight: '700', px: 'px-5', py: 'py-4', conceptSize: '12px' };
-    return { width: '100px', titleSize: '9px', titleWeight: '500', px: 'px-2', py: 'py-1.5', conceptSize: '0px' };
+    if (depth === 0) return { width: '860px', titleSize: '56px', titleWeight: '900', px: 'px-10', py: 'py-8', conceptSize: '18px' };
+    if (depth === 1) return { width: '400px', titleSize: '22px', titleWeight: '700', px: 'px-5', py: 'py-4', conceptSize: '12px' };
+    return { width: '120px', titleSize: '9px', titleWeight: '500', px: 'px-2', py: 'py-1.5', conceptSize: '0px' };
   }
-  if (depth === 0) return { width: '720px', titleSize: '44px', titleWeight: '900', px: 'px-10', py: 'py-8', conceptSize: '16px' };
-  if (depth === 1) return { width: '380px', titleSize: '22px', titleWeight: '700', px: 'px-6', py: 'py-5', conceptSize: '13px' };
-  return { width: '180px', titleSize: '11px', titleWeight: '600', px: 'px-3', py: 'py-2.5', conceptSize: '10px', expandedWidth: '340px' };
+  if (depth === 0) return { width: '860px', titleSize: '48px', titleWeight: '900', px: 'px-10', py: 'py-8', conceptSize: '16px' };
+  if (depth === 1) return { width: '440px', titleSize: '24px', titleWeight: '700', px: 'px-6', py: 'py-5', conceptSize: '14px' };
+  return { width: '220px', titleSize: '12px', titleWeight: '600', px: 'px-3', py: 'py-2.5', conceptSize: '10px', expandedWidth: '380px' };
 };
 
 /** Collapsible metadata footer. */
@@ -121,43 +121,46 @@ const MetadataFooter = ({
 };
 
 /**
- * Three frosted-glass dots in the card header.
- * Dot 1 = red (close/collapse), Dot 2 = amber (brief explain), Dot 3 = green (deep explain).
+ * Progressive depth controls: Three colorless, frosted-glass dots.
+ * Positioned in the card footer (Option B).
+ * Level 0 (not yet explained) → all dots dimmed at 25%.
+ * Level 1/2/3 → corresponding dot is bright white/dark, others idle.
  */
-const ThreeDots = ({
-  depth,
+const ProgressiveDepthDots = ({
+  level,
+  isExplained,
   isExplaining,
-  onDot2,
-  onDot3,
+  onLevelSelect,
 }: {
-  depth: number;
+  level?: 1 | 2 | 3;
+  isExplained?: boolean;
   isExplaining?: boolean;
-  onDot2: () => void;
-  onDot3: () => void;
+  onLevelSelect: (level: 1 | 2 | 3) => void;
 }) => {
-  if (depth >= 2) return null; // only show on root + cluster nodes
+  // Level 0 = no content yet
+  const activeLevel = isExplained ? (level ?? 1) : 0;
 
   return (
-    <div className="flex items-center gap-1 shrink-0 ml-auto mr-2 nodrag">
-      {/* Dot 1 — decorative / collapse hint */}
-      <div
-        className="w-2.5 h-2.5 rounded-full bg-red-400/70 border border-red-500/30 hover:bg-red-400 transition-colors cursor-default"
-        title="Panel indicator"
-      />
-      {/* Dot 2 — brief explain */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDot2(); }}
-        className="w-2.5 h-2.5 rounded-full bg-amber-400/70 border border-amber-500/30 hover:bg-amber-400 transition-colors nodrag"
-        title="Brief explanation"
-        disabled={isExplaining}
-      />
-      {/* Dot 3 — deep / comprehensive explain */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDot3(); }}
-        className="w-2.5 h-2.5 rounded-full bg-emerald-400/70 border border-emerald-500/30 hover:bg-emerald-400 transition-colors nodrag"
-        title="Deep explanation"
-        disabled={isExplaining}
-      />
+    <div className="flex items-center justify-center gap-1.5 py-2 px-3 bg-white/40 backdrop-blur-xl border border-white/60 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.03)] nodrag mx-auto w-max">
+      {[1, 2, 3].map((l) => {
+        const isActive = activeLevel === l;
+        const isIdle = activeLevel === 0;
+        return (
+          <button
+            key={l}
+            disabled={isExplaining}
+            onClick={(e) => { e.stopPropagation(); onLevelSelect(l as 1 | 2 | 3); }}
+            className={`rounded-full transition-all duration-300 ${
+              isActive
+                ? 'w-2 h-2 bg-zinc-800 scale-110 shadow-[0_0_6px_rgba(0,0,0,0.2)]'
+                : isIdle
+                ? 'w-1.5 h-1.5 bg-zinc-300/30 hover:bg-zinc-300/60'
+                : 'w-1.5 h-1.5 bg-zinc-300 hover:bg-zinc-400'
+            } ${isExplaining ? 'animate-pulse cursor-wait' : 'cursor-pointer'}`}
+            title={`Level ${l}: ${l === 1 ? 'Brief' : l === 2 ? 'Standard' : 'Deep'}`}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -170,11 +173,13 @@ const ThreeDots = ({
  */
 export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string; data: ConceptNodeData; isConnectable?: boolean }) => {
   const viewMode = useContext(ViewModeContext);
+  const depth = data.depth ?? 1;
   const [isGenerating, setIsGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  // Root & cluster nodes start expanded so the image footer + dots are visible immediately.
+  const [localExpanded, setLocalExpanded] = useState(depth <= 1);
 
   const isOverview = viewMode === 'overview';
-  const depth = data.depth ?? 1;
   const ds = getDepthStyle(depth, isOverview);
 
   // Auto-generate images for root and primary sub-topics
@@ -245,7 +250,7 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
       {/* Main card */}
       <div className="relative rounded-2xl bg-white/85 backdrop-blur-3xl border-2 border-white/90 max-w-full shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_2px_0_rgba(255,255,255,0.9)] flex flex-col z-10 transition-all duration-500">
 
-        {/* ── HEADER: Title + Three Dots + Expand button ── */}
+        {/* ── HEADER: Title + Image button + Expand button ── */}
         <div className={`flex items-start gap-2 ${ds.px} ${ds.py}`}>
           <h3
             className="text-zinc-900 tracking-tight leading-tight flex-1"
@@ -254,14 +259,18 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
             {data.title}
           </h3>
 
-          {/* Three macOS-style dots (only for depth 0+1) */}
-          {!isOverview && (
-            <ThreeDots
-              depth={depth}
-              isExplaining={data.isExplaining}
-              onDot2={handleDot2}
-              onDot3={handleDot3}
-            />
+          {/* Image button — top-right, next to + */}
+          {!isOverview && !imageUrl && (
+            <button
+              onClick={handleGenerateImage}
+              disabled={isGenerating}
+              title="Generate image"
+              className={`shrink-0 mt-0.5 rounded-full flex items-center justify-center border border-black/[0.06] bg-white hover:bg-zinc-50 text-zinc-400 hover:text-zinc-700 transition-all disabled:opacity-40 nodrag ${
+                depth === 0 ? 'w-9 h-9' : depth === 1 ? 'w-7 h-7' : 'w-5 h-5'
+              }`}
+            >
+              {isGenerating ? <Loader2 size={depth === 0 ? 14 : 10} className="animate-spin" /> : <ImagePlus size={depth === 0 ? 14 : 10} />}
+            </button>
           )}
 
           {/* Expand button — hidden on keyword chips in overview */}
@@ -297,20 +306,6 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
               </div>
             )}
 
-            {/* ── EXPLAIN BUTTON (depth 2+ only, no dots) — shown when not yet explained ── */}
-            {!data.explained && !data.isExplaining && depth >= 2 && (
-              <div className={`${ds.px} pb-3`}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (data.onExplain && id) data.onExplain(data.title, id, 1);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/60 backdrop-blur-md border border-black/[0.08] text-zinc-600 hover:text-zinc-900 hover:bg-white/80 hover:border-black/15 text-[11px] font-medium transition-all duration-200 shadow-sm nodrag"
-                >
-                  Explain
-                </button>
-              </div>
-            )}
 
             {/* ── EXPLAINING loader ── */}
             {data.isExplaining && (
@@ -331,10 +326,12 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
                   const mainText = parts[0].trim();
                   const sourcesText = parts[1]?.trim();
 
-                  const isLong = mainText.length > 450;
-                  const showFullText = data.isExpanded || !isLong;
+                  // Root node gets much longer threshold to avoid text clipping
+                  const maxLen = depth === 0 ? 1200 : 450;
+                  const isLong = mainText.length > maxLen;
+                  const showFullText = localExpanded || !isLong;
                   const displayMainText = !showFullText
-                    ? mainText.slice(0, 400).trim() + '...'
+                    ? mainText.slice(0, maxLen - 50).trim() + '...'
                     : mainText;
 
                   return (
@@ -342,19 +339,18 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
                       <div className="space-y-2.5">
                         {displayMainText.split('\n').map((p, i) => p.trim() ? <p key={i}>{p}</p> : null)}
 
-                        {/* Less / More toggle */}
+                        {/* Less / More toggle — no underline */}
                         {isLong && (
                           <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="text-indigo-500/70 text-[10px] font-medium italic cursor-pointer hover:text-indigo-600 transition-colors nodrag"
+                            <button
+                              className="text-indigo-500 text-[11px] font-semibold hover:text-indigo-700 transition-colors nodrag"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // Toggle via parent — we fire a synthetic doubleClick-style update via onExplain with signal
-                                // Actually we cannot set state from here, signal via data.onExplain with null to toggle
+                                setLocalExpanded(prev => !prev);
                               }}
                             >
-                              {data.isExpanded ? '▲ Less' : '▼ More — double-click to expand'}
-                            </div>
+                              {localExpanded ? '▲ Less' : '▼ More'}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -399,8 +395,8 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
               </div>
             )}
 
-            {/* ── METADATA FOOTER — toggled via isExpanded ── */}
-            {data.isExpanded && (
+            {/* ── METADATA FOOTER — toggled via double-click (data.isExpanded) or More toggle ── */}
+            {(localExpanded || data.isExpanded) && (
               <MetadataFooter
                 depth={depth}
                 sourceName={data.sourceName}
@@ -411,6 +407,18 @@ export const ConceptNode = React.memo(({ id, data, isConnectable }: { id: string
                 isGenerating={isGenerating}
                 handleGenerateImage={handleGenerateImage}
               />
+            )}
+
+            {/* ── OPTION B: Progressive Depth Dots (Bottom Center, all depths) ── */}
+            {!isOverview && (
+              <div className="pb-3 pt-1 flex justify-center">
+                <ProgressiveDepthDots
+                  level={data.explainLevel}
+                  isExplained={data.explained}
+                  isExplaining={data.isExplaining}
+                  onLevelSelect={(l) => data.onExplain?.(data.title, id, l)}
+                />
+              </div>
             )}
           </>
         )}
